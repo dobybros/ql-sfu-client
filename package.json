@@ -14,6 +14,7 @@
   },
   "homepage": "https://github.com/dobybros/ql-sfu-client#readme",
   "dependencies": {
+    "mediasoup-client": "^3.6.2",
     "ql-im-client": "git+ssh://git@github.com/dobybros/ql-im-client.git"
   }
 }
