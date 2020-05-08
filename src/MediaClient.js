@@ -1,9 +1,8 @@
 import * as mediasoupClient from 'mediasoup-client'
-import IMClient from '../network/general/IMClient'
-import {uuid} from '../utils/UUID'
-import {MediaBridge} from './MediaBridge'
-import Soundmeter from '../utils/stream/Soundmeter'
-import {log, tablizeString} from '../utils/logger'
+import IMClient from 'ql-im-client'
+import {uuid} from './utils/UUID'
+import Soundmeter from './utils/stream/Soundmeter'
+import {log, tablizeString} from './utils/logger'
 
 const logger = log('tc-class-core', 'MediaClient');
 
