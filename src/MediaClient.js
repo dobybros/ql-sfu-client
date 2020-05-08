@@ -1,13 +1,14 @@
 import * as mediasoupClient from 'mediasoup-client'
 import IMClient from 'ql-im-client'
 import {uuid} from './utils/UUID'
-import Soundmeter from './utils/stream/Soundmeter'
+import SoundMeter from './utils/stream/SoundMeter'
 import {log, tablizeString} from './utils/logger'
 
-const logger = log('tc-class-core', 'MediaClient');
+const logger = log('ql-sfu-client', 'MediaClient');
 
 const SERVICE = 'gwsfusignal';
 
+// peer status
 const PEER_STATUS_INIT = 1;
 const PEER_STATUS_CONNECTING = 2;
 const PEER_STATUS_CONNECTED = 3;
@@ -23,7 +24,7 @@ const TRANSPORT_STATUS_CLOSED = 106;
 const TRANSPORT_STATUS_ACTIVE_CLOSE = 107;
 const TRANSPORT_STATUS_RETRY_CLOSE = 108;
 
-class MediaClient {
+export default class MediaClient {
   constructor() {
   }
 
@@ -34,44 +35,44 @@ class MediaClient {
    * @param roomId 必传，房间id
    * @param userId 必传，用户id
    * @param terminal 必传，verify返回的terminal
+   * @param imLoginUrl 必传，登录im的url
    * @param auth 必传，classToken
    * @param turns 需要用的turns
+   * @param audioFrequency audioMeter的频率(ms)，默认200ms
    * @param audioContext 获取音量所使用
    * @param audioMeterCallback 获取音量的回调
    * @param newReceiverCallback 必传，有新的可以接收的流时回调客户端，客户端收到回调如果确定自己要接收此路流，就创建一个video标签，并调用接口receiveMedia把video标签传过来，开始接收此流
    * @param receiverClosedCallback 必传，某路接收流关闭时的回调
    */
-  init(roomId, userId, terminal, auth, turns, audioContext, audioMeterCallback, newReceiverCallback, receiverClosedCallback) {
-    if (roomId && userId && terminal && auth && newReceiverCallback && receiverClosedCallback) {
+  init(roomId, userId, terminal, imLoginUrl, auth, turns, audioFrequency, audioContext, audioMeterCallback, newReceiverCallback, receiverClosedCallback) {
+    logger.info(`user will init mediaClient, roomId : ${roomId}, userId : ${userId}, terminal : ${terminal}, imLoginUrl : ${imLoginUrl}, 
+    auth : ${auth}, audioFrequency : ${audioFrequency}, audioContext : ${audioContext}, audioMeterCallback : ${audioMeterCallback}, 
+    newReceiverCallback : ${newReceiverCallback}, receiverClosedCallback : ${receiverClosedCallback}`);
 
-      this._peerMap = new Map();
-      window._peerMap = this._peerMap;
-      this._callbackMap = new Map();
-      this._soundMeterMap = new Map();
-      this._joind = false;
-      this._connect = false;
+    if (roomId && userId && terminal && imLoginUrl && auth && newReceiverCallback && receiverClosedCallback) {
+      // 清除数据
+      this._close();
 
-      this._lastStats = {};
+      // 初始化数据
+      this._initData();
 
       // 打印statistics
-      window.__need_media_stats_log = false;
-      window.__switch_media_stats = function () {
-        window.__need_media_stats_log = !window.__need_media_stats_log;
-        window.__need_media_stats_header = window.__need_media_stats_log;
-      };
-      window.__media_stats_collect_intervel = window.setInterval(this._collectStats.bind(this), 1500);
-      window.__ks = {audio: {}, video: {}};
+      this._initPeerStatsLog();
 
       this._account = roomId;
       this._userId = userId;
       this._terminal = terminal;
+      this._imLoginUrl = imLoginUrl;
       this._auth = auth;
       this._newReceiverCallback = newReceiverCallback;
       this._receiverClosedCallback = receiverClosedCallback;
       this._turns = turns ? turns : [];
+      this._audioFrequancy = audioFrequency;
       this._audioContext = audioContext;
       this._audioMeterCallback = audioMeterCallback;
       this._connectIM();
+    } else {
+      logger.info(`user init mediaClient error, param error.`);
     }
   }
 
@@ -363,16 +364,34 @@ class MediaClient {
    */
   close() {
     logger.info("user " + this._userId + " will close media client.");
-    if (this._imClient)
-      this._imClient.close();
-    for (let peerId of this._peerMap.keys()) {
-      this._releasePeer(peerId, null, true);
+    this._close();
+  }
+
+  _close() {
+    if (this._imClient) {
+      try {
+        this._imClient.close();
+      } catch (e) {}
     }
-    try {
-      window._peerMap = null;
-      window.clearInterval(window.__media_stats_collect_intervel);
-    } catch (e) {}
-    window.__media_stats_collect_intervel = null;
+    this._imClient = null;
+    if (this._peerMap && this._peerMap.size > 0) {
+      for (let peerId of this._peerMap.keys()) {
+        try {
+          this._releasePeer(peerId, null, true);
+        } catch (e) {}
+      }
+    }
+    window._peerMap = null;
+    this._clearPeerStatsLog();
+  }
+
+  _initData() {
+    this._peerMap = new Map();
+    window._peerMap = this._peerMap;
+    this._callbackMap = new Map();
+    this._soundMeterMap = new Map();
+    this._joind = false;
+    this._connect = false;
   }
 
   _createPeer(peerId, isProducer) {
@@ -540,7 +559,9 @@ class MediaClient {
           peer.reconnectTimer = setTimeout(() => {
             peer.reconnectTimer = null;
             let now = new Date().getTime();
-            if (peer.transportStatus === TRANSPORT_STATUS_DISCONNECTED && peer.status !== PEER_STATUS_INIT && peer.disconnecteTime && (now - peer.disconnecteTime >= 3000)) {
+            if (peer.transportStatus === TRANSPORT_STATUS_DISCONNECTED
+              && peer.status !== PEER_STATUS_INIT
+              && peer.disconnecteTime && (now - peer.disconnecteTime >= 3000)) {
               this._releasePeer(peerId, null, false);
               // 重连
               this._getRouterRtpCapability(peerId);
@@ -557,7 +578,9 @@ class MediaClient {
         if (peer) {
           this._releaseReconnectInfo(peerId);
           this._sendTransportStatusChangedMsg(peerId, transportId, peer.transportStatus, (result, errorMsg) => {
-            if (peer.status !== PEER_STATUS_INIT && (peer.isProducer === true || (result && result.content && result.content.senderIsConnected && result.content.senderIsConnected === true))) {
+            if (peer.status !== PEER_STATUS_INIT &&
+              (peer.isProducer === true ||
+                (result && result.content && result.content.senderIsConnected && result.content.senderIsConnected === true))) {
               this._releasePeer(peerId, transportId, false);
               // 重连
               this._getRouterRtpCapability(peerId);
@@ -765,12 +788,13 @@ class MediaClient {
             soundMeter.stop();
           } catch (e) {}
         }
-        soundMeter = new Soundmeter(this._audioContext, new MediaStream([audioTrack]), (n) => {
+        soundMeter = new SoundMeter(this._audioContext, new MediaStream([audioTrack]), (n) => {
           this._audioMeterCallback(peerId, Math.round(1000 * n));
-        });
+        }, this._audioFrequancy);
         this._soundMeterMap.set(peerId, soundMeter);
       }
     } catch (e) {
+      logger.error(`create audio meter for ${peerId} error, eMsg: ${e}.`)
     }
   }
 
@@ -792,8 +816,7 @@ class MediaClient {
       service: SERVICE,
       auth: this._auth,
       terminal: this._terminal,
-      // imLoginUrl: "https://imapi.wonderchats.com/rest/acuim/proxy/login"
-      imLoginUrl: process.env.VUE_APP_IM_LOGIN_SIG
+      imLoginUrl: this._imLoginUrl
     });
     this._imClient.start();
     this._imClient.setEventListener((event, message) => {
@@ -1017,24 +1040,32 @@ class MediaClient {
     }, resultCallback)
   }
 
+  _initPeerStatsLog() {
+    // 打印statistics
+    this._lastStats = {};
+    window.__need_media_stats_log = false;
+    window.__switch_media_stats = function () {
+      window.__need_media_stats_log = !window.__need_media_stats_log;
+    };
+    window.__ks = {audio: {}, video: {}};
+    window.__media_stats_collect_intervel = window.setInterval(this._collectStats.bind(this), 1500);
+  }
+
   async _collectStats() {
     const lengthArg = [3, 1, 7, 25, 10];
     if (window.__need_media_stats_log === true) {
-      if (window.__need_media_stats_header === true) {
-        logger.debug(tablizeString(lengthArg,
-          '***',
-          'T',
-          'kind',
-          'peerId',
-          '∆ bytes',
-          '∆ pkt',
-          'pkt Lost',
-          '∆ frame',
-          'keyFrame',
-          '∆ decodeTime'
-        ));
-        window.__need_media_stats_header = false;
-      }
+      logger.debug(tablizeString(lengthArg,
+        '***',
+        'T',
+        'kind',
+        'peerId',
+        '∆ bytes',
+        '∆ pkt',
+        'pkt Lost',
+        '∆ frame',
+        'keyFrame',
+        '∆ decodeTime'
+      ));
       for (let peerId of this._peerMap.keys()) {
         const peer = this._peerMap.get(peerId);
         if (!peer) continue;
@@ -1146,13 +1177,14 @@ class MediaClient {
     }
   }
 
-}
+  _clearPeerStatsLog() {
+    try {
+      if (window.__media_stats_collect_intervel)
+        window.clearInterval(window.__media_stats_collect_intervel);
+    } catch (e) {}
+    window.__media_stats_collect_intervel = null;
+    window.__ks = null;
+    this._lastStats = null;
+  }
 
-export default function install(Vue) {
-  const mediaBridge = new MediaClient()
-  Vue.mixin({
-    created: function () {
-      this.$mediaBridge = mediaBridge
-    },
-  })
 }
