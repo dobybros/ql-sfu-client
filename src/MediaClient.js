@@ -292,9 +292,11 @@ export default class MediaClient {
       let peer = this._peerMap.get(peerId);
       if (peer && !peer.audioElement && !peer.videoElement) {
         if (audioElement) {
+          this._setElementParam(audioElement);
           peer.audioElement = audioElement;
         }
         if (videoElement) {
+          this._setElementParam(videoElement);
           peer.videoElement = videoElement;
         }
         this._getRouterRtpCapability(peerId);
@@ -326,16 +328,17 @@ export default class MediaClient {
             tracks.push(consumer.track);
           }
         }
+        this._setElementParam(element);
         element.srcObject = new MediaStream(tracks);
         peer[kind + "Element"] = element;
-        let playPromise = element.play();
+        /*let playPromise = element.play();
         if (playPromise) {
           playPromise.then(() => {
             logger.info("peer " + peerId + ", kind " + kind + " play success");
           }).catch((e) => {
             logger.info("peer " + peerId + ", kind " + kind + " play error, eMsg: " + e);
           });
-        }
+        }*/
       }
     }
   }
@@ -665,14 +668,14 @@ export default class MediaClient {
     if (element) {
       logger.info("will set consumer track, peer " + peerId + ", kind " + kind);
       element.srcObject = new MediaStream([consumer.track]);
-      let playPromise = element.play();
+      /*let playPromise = element.play();
       if (playPromise) {
         playPromise.then(() => {
           logger.info("peer " + peerId + ", kind " + kind + " play success");
         }).catch((e) => {
           logger.info("peer " + peerId + ", kind " + kind + " play error, eMsg: " + e);
         });
-      }
+      }*/
     }
     if (kind === "audio") {
       this._upsertAudioMeter(peerId, consumer.track);
@@ -789,12 +792,19 @@ export default class MediaClient {
           } catch (e) {}
         }
         soundMeter = new SoundMeter(this._audioContext, new MediaStream([audioTrack]), (n) => {
-          this._audioMeterCallback(peerId, Math.round(1000 * n));
+          this._audioMeterCallback(peerId, Math.round(0.1 * n));
         }, this._audioFrequancy);
         this._soundMeterMap.set(peerId, soundMeter);
       }
     } catch (e) {
       logger.error(`create audio meter for ${peerId} error, eMsg: ${e}.`)
+    }
+  }
+
+  _setElementParam(element) {
+    if (element) {
+      element.setAttribute("autoplay", '');
+      element.setAttribute("playsinline", '');
     }
   }
 
