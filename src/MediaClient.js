@@ -792,8 +792,8 @@ export default class MediaClient {
           } catch (e) {}
         }
         soundMeter = new SoundMeter(this._audioContext, new MediaStream([audioTrack]), (n) => {
-          this._audioMeterCallback(peerId, Math.round(0.1 * n));
-        }, this._audioFrequancy);
+          this._audioMeterCallback(peerId, Math.round(1000 * n));
+        });
         this._soundMeterMap.set(peerId, soundMeter);
       }
     } catch (e) {

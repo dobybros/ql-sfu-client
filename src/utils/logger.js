@@ -23,7 +23,7 @@ function prodLogger() {
 // const log = process.env.NODE_ENV === 'development' ? devLogger : prodLogger
 const log = devLogger
 // if (process.env.NODE_ENV === 'development') {
-localStorage.debug = 'tc-class-core*:*,tc-class-web*:*'
+// localStorage.debug = 'tc-class-core*:*,tc-class-web*:*'
 // }
 export {
   log
