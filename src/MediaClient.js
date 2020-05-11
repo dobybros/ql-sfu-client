@@ -138,8 +138,7 @@ export default class MediaClient {
         // 释放旧的producer
         peer.trackMap.delete(trackId);
         if (peer.producerMap.get(trackId)) {
-          this._sendChangeProducerMsg(peerId, peer.serverProducerMap.get(trackId), 1);
-          this._releaseProducer(peerId, trackId);
+          this._releaseProducer(peerId, trackId, true);
         }
         // 更新transport参数
         let updateTransport = false;
@@ -258,8 +257,7 @@ export default class MediaClient {
       if (peer && peer.isProducer === true) {
         peer.trackMap.delete(trackId);
         if (peer.producerMap.get(trackId)) {
-          this._sendChangeProducerMsg(peerId, peer.serverProducerMap.get(trackId), 1);
-          this._releaseProducer(peerId, trackId);
+          this._releaseProducer(peerId, trackId, true);
         }
       }
     }
@@ -626,10 +624,9 @@ export default class MediaClient {
           }
           peer.producerMap.set(trackId, producer);
           producer.on('transportclose', () => {
-            peer.producerMap.delete(trackId);
           });
           producer.on('trackended', () => {
-            peer.producerMap.delete(trackId);
+            logger.info(`peer ${peerId} track ${trackId} ${track ? track.label : ""} ended.`);
           });
           if (peer[track.kind + "Pause"] === true) {
             producer.pause();
@@ -745,9 +742,10 @@ export default class MediaClient {
     }
   }
 
-  _releaseProducer(peerId, trackId) {
+  _releaseProducer(peerId, trackId, sendCloseToServer) {
     let peer = this._peerMap.get(peerId);
     if (peer) {
+      let producerId = peer.serverProducerMap.get(trackId);
       let producer = peer.producerMap.get(trackId);
       if (producer) {
         try {
@@ -758,6 +756,10 @@ export default class MediaClient {
         }
       }
       peer.serverProducerMap.delete(trackId);
+      peer.producerMap.delete(trackId);
+      if (sendCloseToServer && sendCloseToServer === true) {
+        this._sendChangeProducerMsg(peerId, producerId, 1);
+      }
     }
   }
 
@@ -953,7 +955,7 @@ export default class MediaClient {
           }
         }
         if (opTrackId && state === 1) {
-          this._releaseProducer(peerId, opTrackId);
+          this._releaseProducer(peerId, opTrackId, false);
         }
       }
         break;
