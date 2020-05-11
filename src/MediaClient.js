@@ -626,7 +626,7 @@ export default class MediaClient {
           producer.on('transportclose', () => {
           });
           producer.on('trackended', () => {
-            logger.info(`peer ${peerId} track ${trackId} ${track ? track.label : ""} ended.`);
+            logger.warn(`peer ${peerId} track ${trackId} ${track ? track.label : ""} ended.`);
           });
           if (peer[track.kind + "Pause"] === true) {
             producer.pause();
