@@ -482,6 +482,9 @@ export default class MediaClient {
       });
       sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
         try {
+
+          logger.info(`peer ${peerId} kind ${kind} appDataTrackId ${appData.trackId}`);
+
           let clientId = null;
           for (let trackId of peer.trackMap.keys()) {
             let track = peer.trackMap.get(trackId);
@@ -608,7 +611,13 @@ export default class MediaClient {
       let track = peer.trackMap.get(trackId);
       if (track) {
         if (peer.device.canProduce(track.kind)) {
-          let options = {track : track.clone()};
+          let cloneTrack = track.clone();
+          let options = {
+            track : cloneTrack,
+            appData : {
+              trackId : cloneTrack.id
+            }
+          };
           if (track.kind === "audio") {
             options["codecOptions"] = {
               opusStereo : 1,
@@ -623,6 +632,7 @@ export default class MediaClient {
             throw e;
           }
           peer.producerMap.set(trackId, producer);
+          logger.info(`peer ${peerId} track ${trackId} producerTrackId ${producer.track.id}`);
           producer.on('transportclose', () => {
           });
           producer.on('trackended', () => {
