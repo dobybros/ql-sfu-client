@@ -288,7 +288,7 @@ export default class MediaClient {
     logger.info("user will receive media : " + peerId);
     if (peerId && (audioElement || videoElement)) {
       let peer = this._peerMap.get(peerId);
-      if (peer && !peer.audioElement && !peer.videoElement) {
+      if (peer && peer.status === PEER_STATUS_INIT && !peer.audioElement && !peer.videoElement) {
         if (audioElement) {
           this._setElementParam(audioElement);
           peer.audioElement = audioElement;
@@ -682,8 +682,10 @@ export default class MediaClient {
   _releasePeer(peerId, transportId, deletePeer) {
     let peer = this._peerMap.get(peerId);
     if (peer && (!transportId || (peer.transport && transportId === peer.transport.id))) {
-      if (deletePeer && deletePeer === true)
+      if (deletePeer && deletePeer === true) {
         this._peerMap.delete(peerId);
+        peer.trackMap.clear();
+      }
       peer.status = PEER_STATUS_INIT;
       this._releaseReconnectInfo(peerId);
       peer.device = null;
@@ -692,6 +694,7 @@ export default class MediaClient {
           peer.transport.close();
         } catch (e) {}
       }
+      peer.transport = null;
       if (peer.isProducer === true) {
         if (peer.producerMap.size > 0) {
           for (let trackId of peer.producerMap.keys()) {
@@ -884,7 +887,7 @@ export default class MediaClient {
           peerIds.forEach((peerId) => {
             logger.info("can receive peerId : " + peerId);
             let peer = this._peerMap.get(peerId);
-            if (!peer) {
+            if (!peer || peer.status === PEER_STATUS_INIT) {
               this._createPeer(peerId, false);
               if (this._newReceiverCallback)
                 this._newReceiverCallback(peerId);
