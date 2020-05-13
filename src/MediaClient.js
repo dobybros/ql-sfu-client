@@ -657,7 +657,7 @@ export default class MediaClient {
                 this._upsertAudioMeter(peerId, track.clone())
               }
             } catch (e) {
-              peer[`connecting${kind}trackId`] = undefined;
+              peer[`connecting${track.kind}trackId`] = undefined;
               logger.error("peer " + peerId + " create " + track.kind +  " producer error, eMsg: " + e);
             }
           }
