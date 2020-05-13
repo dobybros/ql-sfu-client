@@ -665,7 +665,7 @@ export default class MediaClient {
             let producer;
             try {
               producer = await peer.transport.produce(options);
-              if (peer[`using${track.kind}trackId`] && producer.track.id === peer[`using${track.kind}trackId`]) {
+              if (peer[`using${track.kind}trackId`] && producer.track.id === peer[`using${track.kind}trackId`].split("&&")[0]) {
                 peer.producerMap.set(trackId, producer);
                 logger.info(`peer ${peerId} track ${trackId} producerTrackId ${producer.track.id} producerId : ${producer.id}`);
                 producer.on('transportclose', () => {
