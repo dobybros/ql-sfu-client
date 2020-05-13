@@ -1009,7 +1009,7 @@ export default class MediaClient {
         const {peerId, producerId, producerClientId} = content;
         if (peerId && producerId && producerClientId) {
           const length = producerClientId.length;
-          let kind = producerClientId.substring(length - 6);
+          let kind = producerClientId.substring(length - 5);
           let trackId = producerClientId.substr(0, length - 5);
           let callback = this._callbackMap.get(trackId);
           let error = undefined;
