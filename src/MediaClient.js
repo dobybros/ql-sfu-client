@@ -146,7 +146,7 @@ export default class MediaClient {
           peer.bandwidth = newBandwidth;
           updateTransport = true;
         }
-        if (recvInfo) {
+        if (recvInfo && recvInfo.recvTerminals !== peer.recvTerminals) {
           peer.recvTerminals = recvInfo.recvTerminals;
           updateTransport = true;
         }
@@ -488,17 +488,29 @@ export default class MediaClient {
       });
       sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
         try {
-          logger.info(`peer ${peerId} kind ${kind} appDataTrackId ${appData.trackId}`);
-          let usingTrackId = peer[`using${kind}trackId`];
-          if (!usingTrackId) {
-            errback(new Error(`using trackId is null.`));
-          } else {
-            if (appData.trackId !== usingTrackId) {
-              errback(new Error(`appData trackId ${appData.trackId} is not using trackId ${usingTrackId}`));
+          let producePeerId = appData.peerId;
+          logger.info(`peer ${producePeerId} kind ${kind} on produced`);
+          let producePeer = this._peerMap.get(producePeerId);
+          if (producePeer) {
+            let allUsingTrackId = producePeer[`using${kind}trackId`];
+            let connectingTrackId = producePeer[`connecting${kind}trackId`];
+            if (allUsingTrackId && connectingTrackId) {
+              let arr = allUsingTrackId.split("&&");
+              let usingTrackId = arr[0];
+              let produceTrackId = arr[1];
+              if (connectingTrackId === usingTrackId) {
+                this._sendProduceMsg(producePeerId, connectingTrackId + kind, kind, rtpParameters);
+                this._callbackMap.set(connectingTrackId, {callback : callback, errback : errback});
+              } else {
+                errback(new Error(`connecting trackId ${connectingTrackId} is not using trackId ${usingTrackId}`));
+                producePeer[`connecting${kind}trackId`] = undefined;
+                this._produceTrack(producePeerId, produceTrackId)
+              }
             } else {
-              this._sendProduceMsg(peerId, appData.trackId + kind, kind, rtpParameters);
-              this._callbackMap.set(appData.trackId, {callback : callback, errback : errback});
+              errback(new Error(`using trackId or connecting trackId is null.`));
             }
+          } else {
+            errback(new Error(`peer ${producePeerId} is null when on produce ${kind}.`));
           }
         } catch (error) {
           errback(error);
@@ -616,7 +628,7 @@ export default class MediaClient {
           let options = {
             track : cloneTrack,
             appData : {
-              trackId : cloneTrack.id
+              peerId : peerId
             }
           };
           if (track.kind === "audio") {
@@ -625,25 +637,29 @@ export default class MediaClient {
               opusDtx    : 1
             }
           }
-          peer[`using${track.kind}trackId`] = cloneTrack.id;
-          let producer;
-          try {
-            producer = await peer.transport.produce(options);
-            peer.producerMap.set(trackId, producer);
-            logger.info(`peer ${peerId} track ${trackId} producerTrackId ${producer.track.id} producerId : ${producer.id}`);
-            producer.on('transportclose', () => {
-            });
-            producer.on('trackended', () => {
-              logger.warn(`peer ${peerId} track ${trackId} ${track ? track.label : ""} ended.`);
-            });
-            if (peer[track.kind + "Pause"] === true) {
-              producer.pause();
+          peer[`using${track.kind}trackId`] = `${cloneTrack.id}&&${trackId}`;
+          if (!peer[`connecting${track.kind}trackId`]) {
+            peer[`connecting${track.kind}trackId`] = cloneTrack.id;
+            let producer;
+            try {
+              producer = await peer.transport.produce(options);
+              peer.producerMap.set(trackId, producer);
+              logger.info(`peer ${peerId} track ${trackId} producerTrackId ${producer.track.id} producerId : ${producer.id}`);
+              producer.on('transportclose', () => {
+              });
+              producer.on('trackended', () => {
+                logger.warn(`peer ${peerId} track ${trackId} ${track ? track.label : ""} ended.`);
+              });
+              if (peer[track.kind + "Pause"] === true) {
+                producer.pause();
+              }
+              if (track.kind === "audio") {
+                this._upsertAudioMeter(peerId, track.clone())
+              }
+            } catch (e) {
+              peer[`connecting${kind}trackId`] = undefined;
+              logger.error("peer " + peerId + " create " + track.kind +  " producer error, eMsg: " + e);
             }
-            if (track.kind === "audio") {
-              this._upsertAudioMeter(peerId, track.clone())
-            }
-          } catch (e) {
-            logger.error("peer " + peerId + " create " + track.kind +  " producer error, eMsg: " + e);
           }
         }
       }
@@ -1013,14 +1029,24 @@ export default class MediaClient {
           let trackId = producerClientId.substr(0, length - 5);
           let callback = this._callbackMap.get(trackId);
           let error = undefined;
+          let produceTrackId = undefined;
+          let shouldReProduce = false;
           this._callbackMap.delete(trackId);
           let peer = this._peerMap.get(peerId);
           if (peer && callback) {
-            let usingTrackId = peer[`using${kind}trackId`];
-            if (usingTrackId && usingTrackId === trackId) {
-              callback.callback({id : producerId});
+            let allUsingTrackId = peer[`using${kind}trackId`];
+            if (allUsingTrackId) {
+              let arr = allUsingTrackId.split("&&");
+              let usingTrackId = arr[0];
+              if (usingTrackId === trackId) {
+                callback.callback({id : producerId});
+              } else {
+                produceTrackId = arr[1];
+                shouldReProduce = true;
+                error = new Error(`param error, using trackId ${usingTrackId} producerClientId ${trackId}`);
+              }
             } else {
-              error = new Error(`param error, using trackId ${usingTrackId} producerClientId ${trackId}`);
+              error = new Error(`param error, using trackId is null`);
             }
           } else {
             error = new Error("peer is null or callback is null");
@@ -1028,6 +1054,10 @@ export default class MediaClient {
           this._releaseCallback(callback, error);
           if (error) {
             this._releaseProducer(peerId, null, producerId, true);
+          }
+          peer[`connecting${kind}trackId`] = undefined;
+          if (shouldReProduce === true) {
+            this._produceTrack(peerId, produceTrackId);
           }
         }
       }
