@@ -523,7 +523,7 @@ export default class MediaClient {
               shouldReleaseProducer = true;
             }
             if (shouldReleaseProducer === true) {
-              callback({id : appData.trackId});
+              await callback({id : appData.trackId});
               producePeer[`connecting${kind}trackId`] = undefined;
               this._releaseProducer(producePeerId, null, appData.trackId, false);
             }
