@@ -523,7 +523,7 @@ export default class MediaClient {
               shouldReleaseProducer = true;
             }
             if (shouldReleaseProducer === true) {
-              await callback({id : appData.trackId});
+              callback({id : appData.trackId});
               producePeer[`connecting${kind}trackId`] = undefined;
               this._releaseProducer(producePeerId, null, appData.trackId, false);
             }
@@ -665,18 +665,24 @@ export default class MediaClient {
             let producer;
             try {
               producer = await peer.transport.produce(options);
-              peer.producerMap.set(trackId, producer);
-              logger.info(`peer ${peerId} track ${trackId} producerTrackId ${producer.track.id} producerId : ${producer.id}`);
-              producer.on('transportclose', () => {
-              });
-              producer.on('trackended', () => {
-                logger.warn(`peer ${peerId} track ${trackId} ${track ? track.label : ""} ended.`);
-              });
-              if (peer[track.kind + "Pause"] === true) {
-                producer.pause();
-              }
-              if (track.kind === "audio") {
-                this._upsertAudioMeter(peerId, track.clone())
+              if (peer[`using${track.kind}trackId`] && producer.track.id === peer[`using${track.kind}trackId`]) {
+                peer.producerMap.set(trackId, producer);
+                logger.info(`peer ${peerId} track ${trackId} producerTrackId ${producer.track.id} producerId : ${producer.id}`);
+                producer.on('transportclose', () => {
+                });
+                producer.on('trackended', () => {
+                  logger.warn(`peer ${peerId} track ${trackId} ${track ? track.label : ""} ended.`);
+                });
+                if (peer[track.kind + "Pause"] === true) {
+                  producer.pause();
+                }
+                if (track.kind === "audio") {
+                  this._upsertAudioMeter(peerId, track.clone())
+                }
+              } else {
+                try {
+                  producer.close();
+                } catch (e) {}
               }
             } catch (e) {
               peer[`connecting${track.kind}trackId`] = undefined;
