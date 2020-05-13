@@ -375,13 +375,6 @@ export default class MediaClient {
       } catch (e) {}
     }
     this._imClient = null;
-    if (this._callbackMap && this._callbackMap.size > 0) {
-      for (let trackId of this._callbackMap.keys()) {
-        let callback = this._callbackMap.get(trackId);
-        this._releaseCallback(callback, new Error("media client closed."));
-      }
-      this._callbackMap.clear();
-    }
     if (this._peerMap && this._peerMap.size > 0) {
       for (let peerId of this._peerMap.keys()) {
         try {
@@ -500,11 +493,12 @@ export default class MediaClient {
               let produceTrackId = arr[1];
               if (connectingTrackId === usingTrackId) {
                 this._sendProduceMsg(producePeerId, connectingTrackId + kind, kind, rtpParameters);
-                this._callbackMap.set(connectingTrackId, {callback : callback, errback : errback});
+                this._callbackMap.set(connectingTrackId, callback);
               } else {
-                // errback(new Error(`connecting trackId ${connectingTrackId} is not using trackId ${usingTrackId}`));
+                logger.warn(`peer ${producePeerId} produce error, connecting trackId ${connectingTrackId} is not using trackId ${usingTrackId}`);
                 callback({id : connectingTrackId});
                 producePeer[`connecting${kind}trackId`] = undefined;
+                this._releaseProducer(producePeerId, null, connectingTrackId, false);
                 this._produceTrack(producePeerId, produceTrackId)
               }
             } else {
@@ -1030,8 +1024,8 @@ export default class MediaClient {
           let trackId = producerClientId.substr(0, length - 5);
           let callback = this._callbackMap.get(trackId);
           let error = undefined;
-          let produceTrackId = undefined;
           let shouldReProduce = false;
+          let produceTrackId = undefined;
           this._callbackMap.delete(trackId);
           let peer = this._peerMap.get(peerId);
           if (peer && callback) {
@@ -1039,9 +1033,7 @@ export default class MediaClient {
             if (allUsingTrackId) {
               let arr = allUsingTrackId.split("&&");
               let usingTrackId = arr[0];
-              if (usingTrackId === trackId) {
-                callback.callback({id : producerId});
-              } else {
+              if (usingTrackId !== trackId) {
                 produceTrackId = arr[1];
                 shouldReProduce = true;
                 error = new Error(`param error, using trackId ${usingTrackId} producerClientId ${trackId}`);
@@ -1052,8 +1044,11 @@ export default class MediaClient {
           } else {
             error = new Error("peer is null or callback is null");
           }
-          this._releaseCallback(callback, error);
+          if (callback) {
+            callback({id : producerId});
+          }
           if (error) {
+            logger.error(`peer ${peerId} create ${kind} producer error, eMsg : ${error}`);
             this._releaseProducer(peerId, null, producerId, true);
           }
           peer[`connecting${kind}trackId`] = undefined;
