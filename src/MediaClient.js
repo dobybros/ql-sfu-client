@@ -255,6 +255,11 @@ export default class MediaClient {
     if (peerId && trackId) {
       let peer = this._peerMap.get(peerId);
       if (peer && peer.isProducer === true) {
+        let track = peer.trackMap.get(trackId);
+        if (track) {
+          peer[`connecting${track.kind}trackId`] = undefined;
+          peer[`using${track.kind}trackId`] = undefined;
+        }
         peer.trackMap.delete(trackId);
         if (peer.producerMap.get(trackId)) {
           this._releaseProducer(peerId, trackId, null, true);
@@ -383,6 +388,17 @@ export default class MediaClient {
       }
     }
     window._peerMap = null;
+    if (this._callbackMap) {
+      this._callbackMap.clear();
+    }
+    if (this._soundMeterMap && this._soundMeterMap.size > 0) {
+      for (let peerId of this._soundMeterMap.keys()) {
+        try {
+          this._closeAudioMeter(peerId);
+        } catch (e) {}
+      }
+      this._soundMeterMap.clear();
+    }
     this._clearPeerStatsLog();
   }
 
@@ -485,24 +501,34 @@ export default class MediaClient {
           logger.info(`peer ${producePeerId} kind ${kind} on produced`);
           let producePeer = this._peerMap.get(producePeerId);
           if (producePeer) {
+            let shouldReleaseProducer = false;
+            let shouldReProduce = false;
+            let produceTrackId = undefined;
             let allUsingTrackId = producePeer[`using${kind}trackId`];
             let connectingTrackId = producePeer[`connecting${kind}trackId`];
             if (allUsingTrackId && connectingTrackId) {
               let arr = allUsingTrackId.split("&&");
               let usingTrackId = arr[0];
-              let produceTrackId = arr[1];
               if (connectingTrackId === usingTrackId) {
                 this._sendProduceMsg(producePeerId, connectingTrackId + kind, kind, rtpParameters);
                 this._callbackMap.set(connectingTrackId, callback);
               } else {
                 logger.warn(`peer ${producePeerId} produce error, connecting trackId ${connectingTrackId} is not using trackId ${usingTrackId}`);
-                callback({id : connectingTrackId});
-                producePeer[`connecting${kind}trackId`] = undefined;
-                this._releaseProducer(producePeerId, null, connectingTrackId, false);
-                this._produceTrack(producePeerId, produceTrackId)
+                shouldReleaseProducer = true;
+                shouldReProduce = true;
+                produceTrackId = arr[1];
               }
             } else {
-              errback(new Error(`using trackId or connecting trackId is null.`));
+              logger.warn(`peer ${producePeerId} produce error, using trackId or connecting trackId is null.`);
+              shouldReleaseProducer = true;
+            }
+            if (shouldReleaseProducer === true) {
+              callback({id : appData.trackId});
+              producePeer[`connecting${kind}trackId`] = undefined;
+              this._releaseProducer(producePeerId, null, appData.trackId, false);
+            }
+            if (shouldReProduce) {
+              this._produceTrack(producePeerId, produceTrackId)
             }
           } else {
             errback(new Error(`peer ${producePeerId} is null when on produce ${kind}.`));
@@ -623,7 +649,8 @@ export default class MediaClient {
           let options = {
             track : cloneTrack,
             appData : {
-              peerId : peerId
+              peerId : peerId,
+              trackId : cloneTrack.id
             }
           };
           if (track.kind === "audio") {
@@ -753,9 +780,9 @@ export default class MediaClient {
             if (producer.track) {
               let producerTrackId = producer.track.id;
               if (producerTrackId) {
-                let usingTrackId = peer[`using${producer.kind}trackId`];
-                if (usingTrackId && usingTrackId === producerTrackId) {
-                  peer[`using${producer.kind}trackId`] = undefined;
+                let connectingTrackId = peer[`connecting${producer.kind}trackId`];
+                if (connectingTrackId && connectingTrackId === producerTrackId) {
+                  peer[`connecting${producer.kind}trackId`] = undefined;
                 }
               }
             }
@@ -838,9 +865,9 @@ export default class MediaClient {
         if (producer.track) {
           let producerTrackId = producer.track.id;
           if (producerTrackId) {
-            let usingTrackId = peer[`using${producer.kind}trackId`];
-            if (usingTrackId && usingTrackId === producerTrackId) {
-              peer[`using${producer.kind}trackId`] = undefined;
+            let connectingTrackId = peer[`connecting${producer.kind}trackId`];
+            if (connectingTrackId && connectingTrackId === producerTrackId) {
+              peer[`connecting${producer.kind}trackId`] = undefined;
             }
           }
         }
