@@ -502,7 +502,7 @@ export default class MediaClient {
                 this._sendProduceMsg(producePeerId, connectingTrackId + kind, kind, rtpParameters);
                 this._callbackMap.set(connectingTrackId, {callback : callback, errback : errback});
               } else {
-                errback(new Error(`connecting trackId ${connectingTrackId} is not using trackId ${usingTrackId}`));
+                // errback(new Error(`connecting trackId ${connectingTrackId} is not using trackId ${usingTrackId}`));
                 producePeer[`connecting${kind}trackId`] = undefined;
                 this._produceTrack(producePeerId, produceTrackId)
               }
