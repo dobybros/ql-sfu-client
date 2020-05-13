@@ -138,7 +138,7 @@ export default class MediaClient {
         // 释放旧的producer
         peer.trackMap.delete(trackId);
         if (peer.producerMap.get(trackId)) {
-          this._releaseProducer(peerId, trackId, true);
+          this._releaseProducer(peerId, trackId, null, true);
         }
         // 更新transport参数
         let updateTransport = false;
@@ -257,7 +257,7 @@ export default class MediaClient {
       if (peer && peer.isProducer === true) {
         peer.trackMap.delete(trackId);
         if (peer.producerMap.get(trackId)) {
-          this._releaseProducer(peerId, trackId, true);
+          this._releaseProducer(peerId, trackId, null, true);
         }
       }
     }
@@ -375,6 +375,13 @@ export default class MediaClient {
       } catch (e) {}
     }
     this._imClient = null;
+    if (this._callbackMap && this._callbackMap.size > 0) {
+      for (let trackId of this._callbackMap.keys()) {
+        let callback = this._callbackMap.get(trackId);
+        this._releaseCallback(callback, new Error("media client closed."));
+      }
+      this._callbackMap.clear();
+    }
     if (this._peerMap && this._peerMap.size > 0) {
       for (let peerId of this._peerMap.keys()) {
         try {
@@ -408,8 +415,7 @@ export default class MediaClient {
         bandwidth : null,
         producerMap : new Map(),
         consumerMap : new Map(),
-        trackMap : new Map(),
-        serverProducerMap : new Map()
+        trackMap : new Map()
       };
       this._peerMap.set(peerId, peer);
     }
@@ -482,22 +488,17 @@ export default class MediaClient {
       });
       sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
         try {
-
           logger.info(`peer ${peerId} kind ${kind} appDataTrackId ${appData.trackId}`);
-
-          let clientId = null;
-          for (let trackId of peer.trackMap.keys()) {
-            let track = peer.trackMap.get(trackId);
-            if (track.kind === kind) {
-              clientId = trackId;
-              break;
-            }
-          }
-          if (clientId) {
-            this._sendProduceMsg(peerId, clientId, kind, rtpParameters);
-            this._callbackMap.set(clientId, callback);
+          let usingTrackId = peer[`using${kind}trackId`];
+          if (!usingTrackId) {
+            errback(new Error(`using trackId is null.`));
           } else {
-            logger.warn("can not find trackId when on produce");
+            if (appData.trackId !== usingTrackId) {
+              errback(new Error(`appData trackId ${appData.trackId} is not using trackId ${usingTrackId}`));
+            } else {
+              this._sendProduceMsg(peerId, appData.trackId + kind, kind, rtpParameters);
+              this._callbackMap.set(appData.trackId, {callback : callback, errback : errback});
+            }
           }
         } catch (error) {
           errback(error);
@@ -624,25 +625,25 @@ export default class MediaClient {
               opusDtx    : 1
             }
           }
+          peer[`using${track.kind}trackId`] = cloneTrack.id;
           let producer;
           try {
             producer = await peer.transport.produce(options);
+            peer.producerMap.set(trackId, producer);
+            logger.info(`peer ${peerId} track ${trackId} producerTrackId ${producer.track.id} producerId : ${producer.id}`);
+            producer.on('transportclose', () => {
+            });
+            producer.on('trackended', () => {
+              logger.warn(`peer ${peerId} track ${trackId} ${track ? track.label : ""} ended.`);
+            });
+            if (peer[track.kind + "Pause"] === true) {
+              producer.pause();
+            }
+            if (track.kind === "audio") {
+              this._upsertAudioMeter(peerId, track.clone())
+            }
           } catch (e) {
             logger.error("peer " + peerId + " create " + track.kind +  " producer error, eMsg: " + e);
-            throw e;
-          }
-          peer.producerMap.set(trackId, producer);
-          logger.info(`peer ${peerId} track ${trackId} producerTrackId ${producer.track.id}`);
-          producer.on('transportclose', () => {
-          });
-          producer.on('trackended', () => {
-            logger.warn(`peer ${peerId} track ${trackId} ${track ? track.label : ""} ended.`);
-          });
-          if (peer[track.kind + "Pause"] === true) {
-            producer.pause();
-          }
-          if (track.kind === "audio") {
-            this._upsertAudioMeter(peerId, track.clone())
           }
         }
       }
@@ -675,6 +676,34 @@ export default class MediaClient {
     if (element) {
       logger.info("will set consumer track, peer " + peerId + ", kind " + kind);
       element.srcObject = new MediaStream([consumer.track]);
+      if (kind === "video") {
+        this._releasePeerCheckVideoSrcTimer(peerId);
+        peer.checkVideoSrcTimer = setInterval(() => {
+          if (element && element.srcObject) {
+            try {
+              let quality = element.getVideoPlaybackQuality();
+              if (quality) {
+                let dropped = quality.droppedVideoFrames;
+                let total = quality.totalVideoFrames;
+                if (total > 0) {
+                  if (dropped/total > 0.8) {
+                    logger.info("will reset consumer srcObject, peer " + peerId + ", kind " + kind);
+                    element.srcObject = element.srcObject;
+                  } else {
+                    this._releasePeerCheckVideoSrcTimer(peerId);
+                  }
+                }
+              } else {
+                this._releasePeerCheckVideoSrcTimer(peerId);
+              }
+            } catch (e) {
+              this._releasePeerCheckVideoSrcTimer(peerId);
+            }
+          } else {
+            this._releasePeerCheckVideoSrcTimer(peerId);
+          }
+        }, 1000);
+      }
       /*let playPromise = element.play();
       if (playPromise) {
         playPromise.then(() => {
@@ -698,6 +727,7 @@ export default class MediaClient {
       }
       peer.status = PEER_STATUS_INIT;
       this._releaseReconnectInfo(peerId);
+      this._releasePeerCheckVideoSrcTimer(peerId);
       peer.device = null;
       if (peer.transport) {
         try {
@@ -709,9 +739,19 @@ export default class MediaClient {
         if (peer.producerMap.size > 0) {
           for (let trackId of peer.producerMap.keys()) {
             let producer = peer.producerMap.get(trackId);
+            if (producer.track) {
+              let producerTrackId = producer.track.id;
+              if (producerTrackId) {
+                let usingTrackId = peer[`using${producer.kind}trackId`];
+                if (usingTrackId && usingTrackId === producerTrackId) {
+                  peer[`using${producer.kind}trackId`] = undefined;
+                }
+              }
+            }
             try {
               producer.close();
             } catch (e) {}
+
           }
           peer.producerMap.clear()
         }
@@ -726,7 +766,6 @@ export default class MediaClient {
           peer.consumerMap.clear()
         }
       }
-      peer.serverProducerMap.clear();
       if (peer.audioElement && deletePeer && deletePeer === true) {
         peer.audioElement.srcObject = null;
         peer.audioElement = null;
@@ -738,6 +777,14 @@ export default class MediaClient {
       this._closeAudioMeter(peerId);
       if (peer.isProducer === false && deletePeer && deletePeer === true && this._receiverClosedCallback)
         this._receiverClosedCallback(peerId);
+    }
+  }
+
+  _releasePeerCheckVideoSrcTimer(peerId) {
+    let peer = this._peerMap.get(peerId);
+    if (peer && peer.checkVideoSrcTimer) {
+      clearInterval(peer.checkVideoSrcTimer);
+      peer.checkVideoSrcTimer = undefined;
     }
   }
 
@@ -755,22 +802,46 @@ export default class MediaClient {
     }
   }
 
-  _releaseProducer(peerId, trackId, sendCloseToServer) {
+  _releaseProducer(peerId, trackId, producerId, sendCloseToServer) {
     let peer = this._peerMap.get(peerId);
     if (peer) {
-      let producerId = peer.serverProducerMap.get(trackId);
-      let producer = peer.producerMap.get(trackId);
+      let producer = undefined;
+      if (producerId) {
+        if (peer.producerMap.size > 0) {
+          for (let key of peer.producerMap.keys()) {
+            if (peer.producerMap.get(key).id === producerId) {
+              producer = peer.producerMap.get(key);
+              if (!trackId) {
+                trackId = key;
+              }
+              break;
+            }
+          }
+        }
+      }
+      if (!producer && trackId) {
+        producer = peer.producerMap.get(trackId);
+      }
       if (producer) {
+        producerId = producer.id;
+        if (producer.track) {
+          let producerTrackId = producer.track.id;
+          if (producerTrackId) {
+            let usingTrackId = peer[`using${producer.kind}trackId`];
+            if (usingTrackId && usingTrackId === producerTrackId) {
+              peer[`using${producer.kind}trackId`] = undefined;
+            }
+          }
+        }
         try {
-          producer.close()
+          producer.close();
         } catch (e) {}
         if (producer.kind === "audio") {
           this._closeAudioMeter(peerId);
         }
+        peer.producerMap.delete(trackId);
       }
-      peer.serverProducerMap.delete(trackId);
-      peer.producerMap.delete(trackId);
-      if (sendCloseToServer && sendCloseToServer === true) {
+      if (sendCloseToServer && sendCloseToServer === true && producerId) {
         this._sendChangeProducerMsg(peerId, producerId, 1);
       }
     }
@@ -793,6 +864,16 @@ export default class MediaClient {
           this._closeAudioMeter(peerId);
         }
       }
+    }
+  }
+
+  _releaseCallback(callback, error) {
+    if (callback) {
+      if (error) {
+        callback.errback(error);
+      }
+      callback.callback = undefined;
+      callback.errback = undefined;
     }
   }
 
@@ -926,13 +1007,28 @@ export default class MediaClient {
         break;
       case "credProducer" : {
         const {peerId, producerId, producerClientId} = content;
-        let callback = this._callbackMap.get(producerClientId);
-        this._callbackMap.delete(producerClientId);
-        if (callback)
-          callback({id : producerId});
-        let peer = this._peerMap.get(peerId);
-        if (peer) {
-          peer.serverProducerMap.set(producerClientId, producerId);
+        if (peerId && producerId && producerClientId) {
+          const length = producerClientId.length;
+          let kind = producerClientId.substring(length - 6);
+          let trackId = producerClientId.substr(0, length - 5);
+          let callback = this._callbackMap.get(trackId);
+          let error = undefined;
+          this._callbackMap.delete(trackId);
+          let peer = this._peerMap.get(peerId);
+          if (peer && callback) {
+            let usingTrackId = peer[`using${kind}trackId`];
+            if (usingTrackId && usingTrackId === trackId) {
+              callback.callback({id : producerId});
+            } else {
+              error = new Error(`param error, using trackId ${usingTrackId} producerClientId ${trackId}`);
+            }
+          } else {
+            error = new Error("peer is null or callback is null");
+          }
+          this._releaseCallback(callback, error);
+          if (error) {
+            this._releaseProducer(peerId, null, producerId, true);
+          }
         }
       }
         break;
@@ -959,16 +1055,8 @@ export default class MediaClient {
         break;
       case "pState" : {
         const {peerId, producerId, state} = content;
-        let peer = this._peerMap.get(peerId);
-        let opTrackId = null;
-        for (let trackId of peer.serverProducerMap.keys()) {
-          if (peer.serverProducerMap.get(trackId) === producerId) {
-            opTrackId = trackId;
-            break
-          }
-        }
-        if (opTrackId && state === 1) {
-          this._releaseProducer(peerId, opTrackId, false);
+        if (producerId && state === 1) {
+          this._releaseProducer(peerId, null, producerId, false);
         }
       }
         break;
