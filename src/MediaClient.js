@@ -295,11 +295,11 @@ export default class MediaClient {
       let peer = this._peerMap.get(peerId);
       if (peer && peer.status === PEER_STATUS_INIT && !peer.audioElement && !peer.videoElement) {
         if (audioElement) {
-          this._setElementParam(audioElement);
+          this._setElementParam(audioElement, "audio");
           peer.audioElement = audioElement;
         }
         if (videoElement) {
-          this._setElementParam(videoElement);
+          this._setElementParam(videoElement, "video");
           peer.videoElement = videoElement;
         }
         this._getRouterRtpCapability(peerId);
@@ -331,7 +331,7 @@ export default class MediaClient {
             tracks.push(consumer.track);
           }
         }
-        this._setElementParam(element);
+        this._setElementParam(element, kind);
         element.srcObject = new MediaStream(tracks);
         peer[kind + "Element"] = element;
         /*let playPromise = element.play();
@@ -941,10 +941,13 @@ export default class MediaClient {
     }
   }
 
-  _setElementParam(element) {
+  _setElementParam(element, kind) {
     if (element) {
       element.setAttribute("autoplay", '');
       element.setAttribute("playsinline", '');
+      if (kind === "video") {
+        element.mute = true;
+      }
     }
   }
 
