@@ -946,7 +946,7 @@ export default class MediaClient {
       element.setAttribute("autoplay", '');
       element.setAttribute("playsinline", '');
       if (kind === "video") {
-        element.mute = true;
+        element.muted = true;
       }
     }
   }
