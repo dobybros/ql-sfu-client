@@ -366,6 +366,22 @@ export default class MediaClient {
   }
 
   /**
+   * 判断media是否已建联
+   * @param peerId
+   */
+  isMediaConnected(peerId) {
+    if (peerId) {
+      let peer = this._peerMap.get(peerId);
+      if (peer) {
+        if (peer.status && (peer.status === PEER_STATUS_CONNECTING || peer.status === PEER_STATUS_CONNECTED)) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+
+  /**
    * 关闭mediaClient
    */
   close() {
