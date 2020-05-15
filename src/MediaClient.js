@@ -296,7 +296,7 @@ export default class MediaClient {
     if (peerId) {
       let peer = this._peerMap.get(peerId);
       if (peer) {
-        this._sendTransportStatusChangedMsg(peerId, peer.transport.id, TRANSPORT_STATUS_ACTIVE_CLOSE);
+        this._sendTransportStatusChangedMsg(peerId, peer.transport ? peer.transport.id : null, TRANSPORT_STATUS_ACTIVE_CLOSE);
         this._releasePeer(peerId, null, true);
       }
     }
@@ -1137,7 +1137,9 @@ export default class MediaClient {
             logger.error(`peer ${peerId} create ${kind} producer error, eMsg : ${error}`);
             this._releaseProducer(peerId, null, producerId, true);
           }
-          peer[`connecting${kind}trackId`] = undefined;
+          if (peer) {
+            peer[`connecting${kind}trackId`] = undefined;
+          }
           if (shouldReProduce === true) {
             this._produceTrack(peerId, produceTrackId);
           }
