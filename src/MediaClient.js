@@ -1190,29 +1190,42 @@ export default class MediaClient {
 
   _sendCreateTransportMsg(peerId, resultCallback) {
     let peer = this._peerMap.get(peerId);
-    this._sendMessage("createtran", {
-      peerId : peerId,
-      forceTcp : false,
-      isProduce : peer.isProducer,
-      rtpCapabilities : peer.device.rtpCapabilities,
-      maxIncomingBitrate : peer.bandwidth
-    }, resultCallback);
+    if (peer) {
+      this._sendMessage("createtran", {
+        peerId : peerId,
+        forceTcp : false,
+        isProduce : peer.isProducer,
+        rtpCapabilities : peer.device.rtpCapabilities,
+        maxIncomingBitrate : peer.bandwidth
+      }, resultCallback);
+    } else {
+      logger.warn(`peer ${peerId} want send create transport message, but peer not exist.`)
+    }
   }
 
   _sendConnectTransportMsg(peerId, dtlsParameters) {
     let peer = this._peerMap.get(peerId);
-    this._sendMessage("contran", {
-      peerId : peerId,
-      isProduce : peer.isProducer,
-      dtlsParameters : dtlsParameters});
+    if (peer) {
+      this._sendMessage("contran", {
+        peerId : peerId,
+        isProduce : peer.isProducer,
+        dtlsParameters : dtlsParameters});
+    } else {
+      logger.warn(`peer ${peerId} want send connect transport message, but peer not exist.`)
+    }
   }
 
   _sendProduceMsg(peerId, producerClientId, kind, rtpParameters) {
-    this._sendMessage("produce", {
-      peerId : peerId,
-      producerClientId : producerClientId,
-      kind : kind,
-      rtpParameters : rtpParameters});
+    let peer = this._peerMap.get(peerId);
+    if (peer) {
+      this._sendMessage("produce", {
+        peerId : peerId,
+        producerClientId : producerClientId,
+        kind : kind,
+        rtpParameters : rtpParameters});
+    } else {
+      logger.warn(`peer ${peerId} kind ${kind} want send produce message, but peer not exist.`)
+    }
   }
 
   _sendChangeProducerMsg(peerId, producerId, state, resultCallback) {
