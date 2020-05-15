@@ -702,6 +702,11 @@ export default class MediaClient {
             try {
               producer = await peer.transport.produce(options);
               if (peer[`using${track.kind}trackId`] && producer.track.id === peer[`using${track.kind}trackId`].split("&&")[0]) {
+                let oldProducer = peer.producerMap.get(trackId);
+                if (oldProducer) {
+                  logger.warn(`peer ${peerId} producer ${producer.id} creat sucess, but old producer ${oldProducer.id} exist, so release old.`);
+                  this._releaseProducer(peerId, null, oldProducer.id, true);
+                }
                 peer.producerMap.set(trackId, producer);
                 logger.info(`peer ${peerId} track ${trackId} producerTrackId ${producer.track.id} producerId : ${producer.id}`);
                 producer.on('transportclose', () => {
@@ -943,6 +948,8 @@ export default class MediaClient {
         if (consumer.kind === "audio") {
           this._closeAudioMeter(peerId);
         }
+      } else {
+        logger.warn(`will release peer ${peerId} consumer ${producerId}, but consumer not exist.`);
       }
     }
   }
