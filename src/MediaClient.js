@@ -210,6 +210,24 @@ export default class MediaClient {
   }
 
   /**
+   * 是否为暂停状态
+   * @param peerId
+   * @param kind
+   */
+  isPaused(peerId, kind) {
+    if (peerId && kind) {
+      let peer = this._peerMap.get(peerId);
+      if (!peer) {
+        return false;
+      } else {
+        return peer[kind + "Pause"];
+      }
+    } else {
+      return false;
+    }
+  }
+
+  /**
    * 继续播放音频或视频，调用该方法将继续播放所有的音频或视频
    * @param peerId 必传，这路流的id
    * @param kind 必传，"audio"或"video"
