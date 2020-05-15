@@ -758,7 +758,7 @@ export default class MediaClient {
       element.srcObject = new MediaStream([consumer.track]);
       if (kind === "video") {
         this._releasePeerCheckVideoSrcTimer(peerId);
-        peer.checkVideoSrcTimer = setInterval(() => {
+        peer.checkVideoSrcTimer = setTimeout(() => {
           if (element && element.srcObject) {
             try {
               let quality = element.getVideoPlaybackQuality();
@@ -863,7 +863,7 @@ export default class MediaClient {
   _releasePeerCheckVideoSrcTimer(peerId) {
     let peer = this._peerMap.get(peerId);
     if (peer && peer.checkVideoSrcTimer) {
-      clearInterval(peer.checkVideoSrcTimer);
+      clearTimeout(peer.checkVideoSrcTimer);
       peer.checkVideoSrcTimer = undefined;
     }
   }
