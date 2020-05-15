@@ -24,6 +24,9 @@ const TRANSPORT_STATUS_CLOSED = 106;
 const TRANSPORT_STATUS_ACTIVE_CLOSE = 107;
 const TRANSPORT_STATUS_RETRY_CLOSE = 108;
 
+// result error code
+const RESULT_ERROR_CODE_CANNOT_FIND_TRANSPORT = 2011;
+
 export default class MediaClient {
   constructor() {
   }
@@ -525,7 +528,14 @@ export default class MediaClient {
       sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
         peer.status = PEER_STATUS_CONNECTED;
         try {
-          this._sendConnectTransportMsg(peerId, dtlsParameters);
+          this._sendConnectTransportMsg(peerId, dtlsParameters, (result) => {
+            if (result && result.data && result.data.code && result.data.code === RESULT_ERROR_CODE_CANNOT_FIND_TRANSPORT) {
+              let peer = this._peerMap.get(peerId);
+              if (peer) {
+                this._releasePeer(peerId, null, peer.isProducer === false);
+              }
+            }
+          });
           callback();
         } catch (e) {
           errback(e);
@@ -596,7 +606,14 @@ export default class MediaClient {
       peer.transport = recvTransport;
       recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
         try {
-          this._sendConnectTransportMsg(peerId, dtlsParameters);
+          this._sendConnectTransportMsg(peerId, dtlsParameters, (result) => {
+            if (result && result.data && result.data.code && result.data.code === RESULT_ERROR_CODE_CANNOT_FIND_TRANSPORT) {
+              let peer = this._peerMap.get(peerId);
+              if (peer) {
+                this._releasePeer(peerId, null, peer.isProducer === false);
+              }
+            }
+          });
           callback();
         } catch (e) {
           errback(e);
@@ -651,10 +668,10 @@ export default class MediaClient {
           peer.transportStatus = TRANSPORT_STATUS_CLOSED;
         if (peer) {
           this._releaseReconnectInfo(peerId);
-          this._sendTransportStatusChangedMsg(peerId, transportId, peer.transportStatus, (result, errorMsg) => {
+          this._sendTransportStatusChangedMsg(peerId, transportId, peer.transportStatus, (result) => {
             if (peer.status !== PEER_STATUS_INIT &&
               (peer.isProducer === true ||
-                (result && result.content && result.content.senderIsConnected && result.content.senderIsConnected === true))) {
+                (result && result.data && result.data.content && result.data.content.senderIsConnected && result.data.content.senderIsConnected === true))) {
               this._releasePeer(peerId, transportId, false);
               // 重连
               this._getRouterRtpCapability(peerId);
@@ -1036,8 +1053,8 @@ export default class MediaClient {
     switch (message) {
       case "connected":
         logger.info("im connected, will send join");
-        this._sendJoinMsg(this._userId, (result, errorMsg) => {
-          logger.info("join result : " + result + ", eMsg : " + errorMsg);
+        this._sendJoinMsg(this._userId, (result) => {
+          logger.info("join result : " + result.data);
           this._connect = true;
           for (let peerId of this._peerMap.keys()) {
             this._sendPeer(peerId);
@@ -1085,7 +1102,14 @@ export default class MediaClient {
         } else {
           try {
             await this._loadDevice(peerId, bilities);
-            this._sendCreateTransportMsg(peerId, null);
+            this._sendCreateTransportMsg(peerId, (result) => {
+              if (result && result.data && result.data.code && result.data.code === RESULT_ERROR_CODE_CANNOT_FIND_TRANSPORT) {
+                let peer = this._peerMap.get(peerId);
+                if (peer) {
+                  this._releasePeer(peerId, null, peer.isProducer === false);
+                }
+              }
+            });
           } catch (e) {
             needReconnect = true;
           }
@@ -1226,13 +1250,13 @@ export default class MediaClient {
     }
   }
 
-  _sendConnectTransportMsg(peerId, dtlsParameters) {
+  _sendConnectTransportMsg(peerId, dtlsParameters, resultCallback) {
     let peer = this._peerMap.get(peerId);
     if (peer) {
       this._sendMessage("contran", {
         peerId : peerId,
         isProduce : peer.isProducer,
-        dtlsParameters : dtlsParameters});
+        dtlsParameters : dtlsParameters}, resultCallback);
     } else {
       logger.warn(`peer ${peerId} want send connect transport message, but peer not exist.`)
     }
