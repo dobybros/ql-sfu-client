@@ -1072,14 +1072,28 @@ export default class MediaClient {
         break;
       case "recrrcpb" : {
         const {peerId, bilities, code, eMsg} = content;
+        let needReconnect = false;
         if (code) {
-          this._releasePeer(peerId, null, false);
-          setTimeout(() => {
-            this._getRouterRtpCapability(peerId);
-          }, 1000);
+          needReconnect = true;
         } else {
-          await this._loadDevice(peerId, bilities);
-          this._sendCreateTransportMsg(peerId, null);
+          try {
+            await this._loadDevice(peerId, bilities);
+            this._sendCreateTransportMsg(peerId, null);
+          } catch (e) {
+            needReconnect = true;
+          }
+        }
+        if (needReconnect === true) {
+          let peer = this._peerMap.get(peerId);
+          if (peer) {
+            if (peer.transport) {
+              this._sendTransportStatusChangedMsg(peerId, peer.transport.id, TRANSPORT_STATUS_RETRY_CLOSE);
+            }
+            this._releasePeer(peerId, null, false);
+            setTimeout(() => {
+              this._getRouterRtpCapability(peerId);
+            }, 1000);
+          }
         }
       }
         break;
