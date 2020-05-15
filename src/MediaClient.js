@@ -212,7 +212,8 @@ export default class MediaClient {
   /**
    * 是否为暂停状态
    * @param peerId
-   * @param kind
+   * @param kind "audio" or "video"
+   * @return boolean
    */
   isPaused(peerId, kind) {
     if (peerId && kind) {
@@ -386,6 +387,7 @@ export default class MediaClient {
   /**
    * 判断media是否已建联
    * @param peerId
+   * @return boolean
    */
   isMediaConnected(peerId) {
     if (peerId) {
