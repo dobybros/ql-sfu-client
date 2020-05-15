@@ -146,7 +146,7 @@ export default class MediaClient {
           peer.bandwidth = newBandwidth;
           updateTransport = true;
         }
-        if (recvInfo && recvInfo.recvTerminals !== peer.recvTerminals) {
+        if (recvInfo) {
           peer.recvTerminals = recvInfo.recvTerminals;
           updateTransport = true;
         }
