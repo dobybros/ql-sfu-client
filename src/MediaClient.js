@@ -544,6 +544,7 @@ export default class MediaClient {
       sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
         try {
           let producePeerId = appData.peerId;
+          let appTrackId = appData.trackId;
           logger.info(`peer ${producePeerId} kind ${kind} on produced`);
           let producePeer = this._peerMap.get(producePeerId);
           if (producePeer) {
@@ -555,23 +556,28 @@ export default class MediaClient {
             if (allUsingTrackId && connectingTrackId) {
               let arr = allUsingTrackId.split("&&");
               let usingTrackId = arr[0];
-              if (connectingTrackId === usingTrackId) {
-                this._sendProduceMsg(producePeerId, connectingTrackId + kind, kind, rtpParameters, {trackInfo : appData.trackInfo});
-                this._callbackMap.set(connectingTrackId, callback);
+              if (connectingTrackId === appTrackId) {
+                if (connectingTrackId === usingTrackId) {
+                  this._sendProduceMsg(producePeerId, appTrackId + kind, kind, rtpParameters, {trackInfo : appData.trackInfo});
+                  this._callbackMap.set(appTrackId, callback);
+                } else {
+                  logger.warn(`peer ${producePeerId} produce error, connecting trackId ${connectingTrackId} is not using trackId ${usingTrackId}`);
+                  shouldReleaseProducer = true;
+                  shouldReProduce = true;
+                  produceTrackId = arr[1];
+                }
               } else {
-                logger.warn(`peer ${producePeerId} produce error, connecting trackId ${connectingTrackId} is not using trackId ${usingTrackId}`);
+                logger.warn(`peer ${producePeerId} produce error, appdata.trackId ${appTrackId} != connectingTrackId ${connectingTrackId}`);
                 shouldReleaseProducer = true;
-                shouldReProduce = true;
-                produceTrackId = arr[1];
               }
             } else {
               logger.warn(`peer ${producePeerId} produce error, using trackId or connecting trackId is null, using ${allUsingTrackId}, connectingTrackId ${connectingTrackId}`);
               shouldReleaseProducer = true;
             }
             if (shouldReleaseProducer === true) {
-              callback({id : appData.trackId});
+              callback({id : appTrackId});
               producePeer[`connecting${kind}trackId`] = undefined;
-              this._releaseProducer(producePeerId, null, appData.trackId, false);
+              this._releaseProducer(producePeerId, null, appTrackId, false);
             }
             if (shouldReProduce) {
               this._produceTrack(producePeerId, produceTrackId)
@@ -1156,17 +1162,22 @@ export default class MediaClient {
           this._callbackMap.delete(trackId);
           let peer = this._peerMap.get(peerId);
           if (peer && callback) {
-            let allUsingTrackId = peer[`using${kind}trackId`];
-            if (allUsingTrackId) {
-              let arr = allUsingTrackId.split("&&");
-              let usingTrackId = arr[0];
-              if (usingTrackId !== trackId) {
-                produceTrackId = arr[1];
-                shouldReProduce = true;
-                error = new Error(`param error, using trackId ${usingTrackId} producerClientId ${trackId}`);
+            let connectingTrackId = peer[`connecting${kind}trackId`];
+            if (connectingTrackId && connectingTrackId === trackId) {
+              let allUsingTrackId = peer[`using${kind}trackId`];
+              if (allUsingTrackId) {
+                let arr = allUsingTrackId.split("&&");
+                let usingTrackId = arr[0];
+                if (usingTrackId !== trackId) {
+                  produceTrackId = arr[1];
+                  shouldReProduce = true;
+                  error = new Error(`param error, using trackId ${usingTrackId} producerClientId ${trackId}`);
+                }
+              } else {
+                error = new Error(`param error, using trackId is null`);
               }
             } else {
-              error = new Error(`param error, using trackId is null`);
+              error = new Error(`param error, connecting trackId ${connectingTrackId} != trackId ${trackId}`);
             }
           } else {
             error = new Error("peer is null or callback is null");
