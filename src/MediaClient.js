@@ -556,7 +556,7 @@ export default class MediaClient {
               let arr = allUsingTrackId.split("&&");
               let usingTrackId = arr[0];
               if (connectingTrackId === usingTrackId) {
-                this._sendProduceMsg(producePeerId, connectingTrackId + kind, kind, rtpParameters);
+                this._sendProduceMsg(producePeerId, connectingTrackId + kind, kind, rtpParameters, {trackInfo : appData.trackInfo});
                 this._callbackMap.set(connectingTrackId, callback);
               } else {
                 logger.warn(`peer ${producePeerId} produce error, connecting trackId ${connectingTrackId} is not using trackId ${usingTrackId}`);
@@ -565,7 +565,7 @@ export default class MediaClient {
                 produceTrackId = arr[1];
               }
             } else {
-              logger.warn(`peer ${producePeerId} produce error, using trackId or connecting trackId is null.`);
+              logger.warn(`peer ${producePeerId} produce error, using trackId or connecting trackId is null, using ${allUsingTrackId}, connectingTrackId ${connectingTrackId}`);
               shouldReleaseProducer = true;
             }
             if (shouldReleaseProducer === true) {
@@ -703,7 +703,14 @@ export default class MediaClient {
             track : cloneTrack,
             appData : {
               peerId : peerId,
-              trackId : cloneTrack.id
+              trackId : cloneTrack.id,
+              trackInfo : {
+                originId : track.id,
+                label : cloneTrack.label,
+                enabled : cloneTrack.enabled,
+                muted : cloneTrack.muted,
+                readyState : cloneTrack.readyState
+              }
             }
           };
           if (track.kind === "audio") {
@@ -713,8 +720,10 @@ export default class MediaClient {
             }
           }
           peer[`using${track.kind}trackId`] = `${cloneTrack.id}&&${trackId}`;
+          logger.info(`peer ${peerId} ${track.kind} set usingTrackId ${cloneTrack.id}&&${trackId}`);
           if (!peer[`connecting${track.kind}trackId`]) {
             peer[`connecting${track.kind}trackId`] = cloneTrack.id;
+            logger.info(`peer ${peerId} ${track.kind} set connectingTrackId ${cloneTrack.id}`);
             let producer;
             try {
               producer = await peer.transport.produce(options);
@@ -1169,7 +1178,13 @@ export default class MediaClient {
             this._releaseProducer(peerId, null, producerId, true);
           }
           if (peer) {
-            peer[`connecting${kind}trackId`] = undefined;
+            let connectingTrackId = peer[`connecting${kind}trackId`];
+            if (connectingTrackId && connectingTrackId === trackId) {
+              logger.info(`will release connecting track, peer ${peerId} ${kind} connectingTrackId ${connectingTrackId}`);
+              peer[`connecting${kind}trackId`] = undefined;
+            } else {
+              logger.warn(`can not release connecting trackId when created producer, because peer ${peerId} ${kind} connecting trackId ${connectingTrackId}`);
+            }
           }
           if (shouldReProduce === true) {
             this._produceTrack(peerId, produceTrackId);
@@ -1262,14 +1277,16 @@ export default class MediaClient {
     }
   }
 
-  _sendProduceMsg(peerId, producerClientId, kind, rtpParameters) {
+  _sendProduceMsg(peerId, producerClientId, kind, rtpParameters, reserve) {
     let peer = this._peerMap.get(peerId);
     if (peer) {
       this._sendMessage("produce", {
         peerId : peerId,
         producerClientId : producerClientId,
         kind : kind,
-        rtpParameters : rtpParameters});
+        rtpParameters : rtpParameters,
+        reserve : reserve
+      });
     } else {
       logger.warn(`peer ${peerId} kind ${kind} want send produce message, but peer not exist.`)
     }
