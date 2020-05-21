@@ -576,7 +576,7 @@ export default class MediaClient {
             }
             if (shouldReleaseProducer === true) {
               callback({id : appTrackId});
-              if (producePeer[`connecting${kind}trackId`] === appTrackId) {
+              if (appTrackId === producePeer[`connecting${kind}trackId`]) {
                 producePeer[`connecting${kind}trackId`] = undefined;
               }
               this._releaseProducer(producePeerId, null, appTrackId, false);
