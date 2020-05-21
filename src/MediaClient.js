@@ -722,6 +722,7 @@ export default class MediaClient {
           peer[`using${track.kind}trackId`] = `${cloneTrack.id}&&${trackId}`;
           logger.info(`peer ${peerId} ${track.kind} set usingTrackId ${cloneTrack.id}&&${trackId}`);
           if (!peer[`connecting${track.kind}trackId`]) {
+            logger.info(`peer ${peerId} ${track.kind} now connectingTrackId ${peer[`connecting${track.kind}trackId`]}`);
             peer[`connecting${track.kind}trackId`] = cloneTrack.id;
             logger.info(`peer ${peerId} ${track.kind} set connectingTrackId ${cloneTrack.id}`);
             let producer;
