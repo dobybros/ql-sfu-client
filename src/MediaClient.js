@@ -153,7 +153,7 @@ export default class MediaClient {
           peer.recvTerminals = recvInfo.recvTerminals;
           updateTransport = true;
         }
-        if (updateTransport === true) {
+        if (updateTransport === true && peer.transport) {
           this._sendUpdateTransport(peerId, newBandwidth, recvInfo)
         }
         // 创建新的producer
@@ -413,12 +413,7 @@ export default class MediaClient {
   }
 
   _close() {
-    if (this._imClient) {
-      try {
-        this._imClient.close();
-      } catch (e) {}
-    }
-    this._imClient = null;
+    this._closeIM();
     if (this._peerMap && this._peerMap.size > 0) {
       for (let peerId of this._peerMap.keys()) {
         try {
@@ -439,6 +434,15 @@ export default class MediaClient {
       this._soundMeterMap.clear();
     }
     this._clearPeerStatsLog();
+  }
+
+  _closeIM() {
+    if (this._imClient) {
+      try {
+        this._imClient.close();
+      } catch (e) {}
+    }
+    this._imClient = null;
   }
 
   _initData() {
@@ -1041,7 +1045,7 @@ export default class MediaClient {
     }
   }
 
-  async _connectIM() {
+  _connectIM() {
     this._imClient = new IMClient({
       account: this._account,
       service: SERVICE,
@@ -1081,14 +1085,27 @@ export default class MediaClient {
         break;
       case "disconnected":
         logger.info("im disconnected, will release peer");
-        this._connect = false;
-        for (let peerId of this._peerMap.keys()) {
-          let peer = this._peerMap.get(peerId);
-          this._releasePeer(peerId, null, !peer.isProducer);
-        }
+        this._handleIMDisconnected();
+        break;
+      case "kickout":
+      case "bye":
+        logger.info(`im ${message}, will retry`);
+        this._handleIMDisconnected();
+        setTimeout(() => {
+          this._closeIM();
+          this._connectIM();
+        }, 2000);
         break;
       default:
         break
+    }
+  }
+
+  _handleIMDisconnected() {
+    this._connect = false;
+    for (let peerId of this._peerMap.keys()) {
+      let peer = this._peerMap.get(peerId);
+      this._releasePeer(peerId, null, !peer.isProducer);
     }
   }
 
