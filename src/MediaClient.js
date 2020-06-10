@@ -405,6 +405,21 @@ export default class MediaClient {
   }
 
   /**
+   * 判断media是否存在
+   * @param peerId
+   * @return boolean
+   */
+  isMediaExist(peerId) {
+    if (peerId) {
+      let peer = this._peerMap.get(peerId);
+      if (peer) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
    * 关闭mediaClient
    */
   close() {
