@@ -1029,7 +1029,10 @@ export default class MediaClient {
           } catch (e) {}
         }
         soundMeter = new SoundMeter(this._audioContext, new MediaStream([audioTrack]), (n) => {
-          this._audioMeterCallback(peerId, Math.round(1000 * n));
+          let peer = this._peerMap.get(peerId);
+          if (peer && peer.audioPause === false) {
+            this._audioMeterCallback(peerId, Math.round(1000 * n));
+          }
         });
         this._soundMeterMap.set(peerId, soundMeter);
       }
