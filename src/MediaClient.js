@@ -994,7 +994,7 @@ export default class MediaClient {
       if (consumer) {
         let element = peer[consumer.kind + "Element"];
         if (element && element.srcObject) {
-          element.srcObject.removeTrack(consumer.track);
+          // element.srcObject.removeTrack(consumer.track);
         }
         try {
           consumer.close()
@@ -1073,14 +1073,19 @@ export default class MediaClient {
     });
     this._imClient.start();
     this._imClient.setEventListener((event, message) => {
-      logger.info("received event : " + event + ", message : " + JSON.stringify(message));
       switch (event) {
         case ".message":
-          this._handleMessage(message);
+          logger.info(`received message, contentType: ${message.contentType}, content: ${JSON.stringify(message.content)}`);
+          if (this._connect === true) {
+            this._handleMessage(message);
+          } else {
+            logger.warn(`not handle message, because im disconnected`)
+          }
           break;
         case ".result":
           break;
         case ".status":
+          logger.info(`received status, content : ${JSON.stringify(message)}`);
           this._handleStatus(message);
           break;
         default:
