@@ -525,6 +525,7 @@ export default class MediaClient {
     this._soundMeterMap = new Map();
     this._joind = false;
     this._connect = false;
+    this._imConnected = false;
   }
 
   _createPeer(peerId, isProducer) {
@@ -1134,7 +1135,7 @@ export default class MediaClient {
       switch (event) {
         case ".message":
           logger.info(`received message, contentType: ${message.contentType}, content: ${JSON.stringify(message.content)}`);
-          if (this._connect === true) {
+          if (this._imConnected === true) {
             this._handleMessage(message);
           } else {
             logger.warn(`not handle message, because im disconnected`)
@@ -1156,6 +1157,7 @@ export default class MediaClient {
     switch (message) {
       case "connected":
         logger.info("im connected, will send join");
+        this._imConnected = true;
         this._sendJoinMsg(this._userId, (result) => {
           logger.info("join result : " + result.data);
           this._connect = true;
@@ -1166,11 +1168,13 @@ export default class MediaClient {
         break;
       case "disconnected":
         logger.info("im disconnected, will release peer");
+        this._imConnected = false;
         this._handleIMDisconnected();
         break;
       case "kickout":
       case "bye":
         logger.info(`im ${message}, will retry`);
+        this._imConnected = false;
         this._handleIMDisconnected();
         setTimeout(() => {
           this._closeIM();
@@ -1445,7 +1449,7 @@ export default class MediaClient {
 
   _filterIM(peerId) {
     if (peerId) {
-      if (this._connect === true) {
+      if (this._imConnected === true) {
         return true
       } else {
         logger.warn(`send message failed, because im disconnected, so will release peer ${peerId}`);
