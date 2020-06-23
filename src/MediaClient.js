@@ -177,6 +177,64 @@ export default class MediaClient {
   }
 
   /**
+   * 替换track
+   * @param peerId 必传，这路流的id
+   * @param trackId 必传，要添加或更新的trackId，对应sendMedia方法中trackMap中的key
+   * @param newTrack 要添加或更新的track
+   * @param newBandwidth 更新该track需要的带宽，不传则保持原来带宽不变
+   * @param resultCallback 调用此方法是否成功
+   * @param recvInfo 此路视频接收信息，传null保持不变，若此参数不为null，并且参数中的recvTerminals为null，则发给所有人
+   *  {
+   *    recvTerminals : [1, 3455]
+   *  }
+   */
+  async replaceTrack(peerId, trackId, newTrack, newBandwidth, resultCallback, recvInfo) {
+    logger.info("replace track, peerId : " + peerId + ", trackId : " + trackId + ", newTrack : " + newTrack + ", newBandwidth : " + newBandwidth + ", recvInfo : " + recvInfo);
+    if (peerId && trackId && newTrack) {
+      let peer = this._peerMap.get(peerId);
+      if (peer) {
+        // 更新transport参数
+        let updateTransport = false;
+        if (newBandwidth && newBandwidth !== peer.bandwidth) {
+          peer.bandwidth = newBandwidth;
+          updateTransport = true;
+        }
+        if (recvInfo) {
+          peer.recvTerminals = recvInfo.recvTerminals;
+          updateTransport = true;
+        }
+        if (updateTransport === true && peer.transport) {
+          this._sendUpdateTransport(peerId, newBandwidth, recvInfo)
+        }
+        // 替换producer
+        peer.trackMap.set(trackId, newTrack);
+        if (peer.producerMap.get(trackId)) {
+          let producer = peer.producerMap.get(trackId);
+          producer.replaceTrack({track : newTrack.clone()});
+          if (newTrack.kind === "audio") {
+            this._upsertAudioMeter(peerId, newTrack.clone());
+          }
+        } else {
+          await this._produceTrack(peerId, trackId);
+        }
+        if (resultCallback) {
+          resultCallback(true)
+        }
+      } else {
+        logger.info("upsert track error, can not find peer, peerId : " + peerId + ", trackId : " + trackId);
+        if (resultCallback) {
+          resultCallback(false, "can not find peer.");
+        }
+      }
+    } else {
+      logger.info("upsert track error, param error, peerId : " + peerId + ", trackId : " + trackId);
+      if (resultCallback) {
+        resultCallback(false, "param error.");
+      }
+    }
+  }
+
+  /**
    * 暂停音频或视频，调用该方法将暂停播放所有的音频或视频
    * @param peerId 必传，这路流的id
    * @param kind 必传，"audio"或"video"
@@ -994,7 +1052,7 @@ export default class MediaClient {
       if (consumer) {
         let element = peer[consumer.kind + "Element"];
         if (element && element.srcObject) {
-          // element.srcObject.removeTrack(consumer.track);
+          element.srcObject.removeTrack(consumer.track);
         }
         try {
           consumer.close()
