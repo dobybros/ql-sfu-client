@@ -214,7 +214,11 @@ export default class MediaClient {
         peer.trackMap.set(trackId, newTrack);
         if (peer.producerMap.get(trackId)) {
           let producer = peer.producerMap.get(trackId);
-          producer.replaceTrack({track : newTrack.clone()});
+          let cloneTrack = newTrack;
+          if (this._needCloneSendTrack === true) {
+            cloneTrack = newTrack.clone();
+          }
+          producer.replaceTrack({track : cloneTrack});
           if (newTrack.kind === "audio") {
             this._upsertAudioMeter(peerId, newTrack.clone());
           }
@@ -789,7 +793,7 @@ export default class MediaClient {
       if (track) {
         if (peer.device.canProduce(track.kind)) {
           let cloneTrack = track;
-          if (this._needCloneSendTrack) {
+          if (this._needCloneSendTrack === true) {
             cloneTrack = track.clone();
           }
           let options = {
