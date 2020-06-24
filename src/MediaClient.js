@@ -47,10 +47,10 @@ export default class MediaClient {
    * @param newReceiverCallback 必传，有新的可以接收的流时回调客户端，客户端收到回调如果确定自己要接收此路流，就创建一个video标签，并调用接口receiveMedia把video标签传过来，开始接收此流
    * @param receiverClosedCallback 必传，某路接收流关闭时的回调
    */
-  init({roomId, userId, terminal, imLoginUrl, auth, turns, audioFrequency, audioContext, audioMeterCallback, newReceiverCallback, receiverClosedCallback}) {
+  init({roomId, userId, terminal, imLoginUrl, auth, turns, audioFrequency, audioContext, audioMeterCallback, newReceiverCallback, receiverClosedCallback, needCloneSendTrack}) {
     logger.info(`user will init mediaClient, roomId : ${roomId}, userId : ${userId}, terminal : ${terminal}, imLoginUrl : ${imLoginUrl}, 
     audioFrequency : ${audioFrequency}, audioContext : ${audioContext}, audioMeterCallback : ${audioMeterCallback}, 
-    newReceiverCallback : ${newReceiverCallback}, receiverClosedCallback : ${receiverClosedCallback}`);
+    newReceiverCallback : ${newReceiverCallback}, receiverClosedCallback : ${receiverClosedCallback}, needCloneSendTrack : ${needCloneSendTrack}`);
 
     if (roomId && userId && terminal && imLoginUrl && auth && newReceiverCallback && receiverClosedCallback) {
       // 清除数据
@@ -73,6 +73,10 @@ export default class MediaClient {
       this._audioFrequancy = audioFrequency;
       this._audioContext = audioContext;
       this._audioMeterCallback = audioMeterCallback;
+      if (needCloneSendTrack === false)
+        this._needCloneSendTrack = false;
+      else
+        this._needCloneSendTrack = true;
       this._connectIM();
     } else {
       logger.info(`user init mediaClient error, param error.`);
@@ -784,7 +788,10 @@ export default class MediaClient {
       let track = peer.trackMap.get(trackId);
       if (track) {
         if (peer.device.canProduce(track.kind)) {
-          let cloneTrack = track.clone();
+          let cloneTrack = track;
+          if (this._needCloneSendTrack) {
+            cloneTrack = track.clone();
+          }
           let options = {
             track : cloneTrack,
             appData : {
