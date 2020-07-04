@@ -261,10 +261,11 @@ export default class MediaClient {
               producer.pause();
           }
         } else {
-          for (let trackId of peer.consumerMap.keys()) {
-            let consumer = peer.consumerMap.get(trackId);
-            if (consumer.kind === kind)
-              consumer.pause();
+          for (let producerId of peer.consumerMap.keys()) {
+            let consumer = peer.consumerMap.get(producerId);
+            if (consumer.kind === kind) {
+              this._pauseConsumer(peerId, producerId, consumer);
+            }
           }
         }
       }
@@ -316,9 +317,10 @@ export default class MediaClient {
               producer.resume();
           }
         } else {
-          for (let trackId of peer.consumerMap.keys()) {
-            let consumer = peer.consumerMap.get(trackId);
+          for (let producerId of peer.consumerMap.keys()) {
+            let consumer = peer.consumerMap.get(producerId);
             if (consumer.kind === kind)
+              this._sendChangeConsumerMsg(peerId, producerId, 3, undefined);
               consumer.resume();
           }
         }
@@ -879,7 +881,7 @@ export default class MediaClient {
     }
     peer.consumerMap.set(producerId, consumer);
     if (peer[kind + "Pause"] === true) {
-      consumer.pause();
+      this._pauseConsumer(peerId, producerId, consumer);
     }
     let element = peer[kind + "Element"];
     if (element) {
@@ -924,6 +926,13 @@ export default class MediaClient {
     }
     if (kind === "audio") {
       this._upsertAudioMeter(peerId, consumer.track);
+    }
+  }
+
+  _pauseConsumer(peerId, producerId, consumer) {
+    this._sendChangeConsumerMsg(peerId, producerId, 2, undefined);
+    if (consumer) {
+      consumer.pause();
     }
   }
 
@@ -1430,6 +1439,16 @@ export default class MediaClient {
   _sendChangeProducerMsg(peerId, producerId, state, resultCallback) {
     if (this._filterIM(peerId) === true) {
       this._sendMessage("changePro", {
+        peerId : peerId,
+        producerId : producerId,
+        state : state
+      }, resultCallback);
+    }
+  }
+
+  _sendChangeConsumerMsg(peerId, producerId, state, resultCallback) {
+    if (this._filterIM(peerId) === true) {
+      this._sendMessage("changeCon", {
         peerId : peerId,
         producerId : producerId,
         state : state
