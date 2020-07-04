@@ -488,6 +488,31 @@ export default class MediaClient {
   }
 
   /**
+   * 判断某种kind的track是否存在
+   * @param peerId
+   * @param kind
+   * @return boolean
+   */
+  isKindExist(peerId, kind) {
+    if (peerId && kind) {
+      let peer = this._peerMap.get(peerId);
+      if (peer) {
+        if (peer.isProducer === true) {
+          if (peer.trackMap.size > 0) {
+            for (let trackId of peer.trackMap.keys()) {
+              let track = peer.trackMap.get(trackId);
+              if (track.kind === kind) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+    return false
+  }
+
+  /**
    * 关闭mediaClient
    */
   close() {
