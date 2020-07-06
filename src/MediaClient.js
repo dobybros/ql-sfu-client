@@ -1135,7 +1135,7 @@ export default class MediaClient {
         soundMeter = new SoundMeter(this._audioContext, new MediaStream([audioTrack]), (n) => {
           let peer = this._peerMap.get(peerId);
           if (peer && peer.audioPause === false) {
-            logger.info(`audio meter update, ${n}`);
+            // logger.info(`audio meter update, ${n}`);
             this._audioMeterCallback(peerId, n);
           }
         }, this._audioFrequancy ? this._audioFrequancy : 200);
