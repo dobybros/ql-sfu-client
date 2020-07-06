@@ -1,56 +1,39 @@
-/*
- *  Copyright (c) 2015 The WebRTC project authors. All Rights Reserved.
- *
- *  Use of this source code is governed by a BSD-style license
- *  that can be found in the LICENSE file in the root of the source
- *  tree.
- */
+export default class SoundMeter {
+  constructor(context, stream, callback, frequency = 200) {
+    this.context = context;
+    this.callback = callback;
+    this.analyser = context.createAnalyser();
+    this.analyser.fftSize = 32;
+    this.mic = context.createMediaStreamSource(stream);
+    this.mic.connect(this.analyser);
+    const bufferLength = this.analyser.frequencyBinCount;
+    this.dataArray = new Uint8Array(bufferLength);
 
-
-// Meter class that generates a number correlated to audio volume.
-// The meter class itself displays nothing, but it makes the
-// instantaneous and time-decaying volumes available for inspection.
-// It also reports on the fraction of samples that were at or near
-// the top of the measurement range.
-export default function SoundMeter(context, stream, callback) {
-  this.context = context;
-  this.callback = callback;
-  this.instant = 0.0;
-  this.slow = 0.0;
-  this.clip = 0.0;
-  this.script = context.createScriptProcessor(2048, 1, 1);
-  const that = this;
-  this.script.onaudioprocess = function(event) {
-    const input = event.inputBuffer.getChannelData(0);
-    let i;
-    let sum = 0.0;
-    let clipcount = 0;
-    for (i = 0; i < input.length; ++i) {
-      sum += input[i] * input[i];
-      if (Math.abs(input[i]) > 0.99) {
-        clipcount += 1;
+    this.intervalId = window.setInterval(() => {
+      if (this.context.status === undefined || this.context.status === 'suspend') {
+        this.context.resume()
       }
-    }
-    that.instant = Math.sqrt(sum / input.length);
-    that.slow = 0.95 * that.slow + 0.05 * that.instant;
-    that.clip = clipcount / input.length;
-
-    that.callback && that.callback(that.slow)
-  };
-  try {
-    this.mic = this.context.createMediaStreamSource(stream);
-    this.mic.connect(this.script);
-    // necessary to make sample run, but should not be.
-    this.script.connect(this.context.destination);
-  } catch (e) {
-    this.$logger.error(e);
+      this.analyser.getByteFrequencyData(this.dataArray);
+      // let strength = 0
+      // this.dataArray.forEach(v => {
+      //   if (v > 0)
+      //     strength += Math.abs(v - 128)
+      // })
+      if (this.callback)
+        this.callback(this.dataArray[3])
+    }, frequency)
   }
 }
 
 SoundMeter.prototype.stop = function() {
-  this.mic.disconnect();
+  window.clearInterval(this.intervalId);
+  try {
+    this.mic.disconnect()
+  } catch (e) {}
   this.mic = undefined;
-  this.script.onaudioprocess = undefined;
-  this.script.disconnect();
+  try {
+    this.analyser.disconnect()
+  } catch (e) {}
+  this.analyser = undefined;
   this.callback = undefined;
 };
