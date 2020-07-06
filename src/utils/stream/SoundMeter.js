@@ -1,3 +1,7 @@
+/**
+ * 0 ~ 255
+ */
+
 export default class SoundMeter {
   constructor(context, stream, callback, frequency = 200) {
     this.context = context;
