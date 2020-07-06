@@ -23,8 +23,11 @@ export default class SoundMeter {
       //   if (v > 0)
       //     strength += Math.abs(v - 128)
       // })
-      if (this.callback)
-        this.callback(this.dataArray[3])
+      if (this.callback) {
+        // 0 ~ 255 to 0 ~ 100
+        let volume = 20 * this.dataArray[3] / 51;
+        this.callback(volume)
+      }
     }, frequency)
   }
 }
