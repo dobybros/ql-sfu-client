@@ -34,8 +34,7 @@ export default function SoundMeter(context, stream, callback) {
     that.instant = Math.sqrt(sum / input.length);
     that.slow = 0.95 * that.slow + 0.05 * that.instant;
     that.clip = clipcount / input.length;
-
-    that.callback && that.callback(that.slow)
+    that.callback && that.callback(Math.round(1000 * that.slow))
   };
   try {
     this.mic = this.context.createMediaStreamSource(stream);
