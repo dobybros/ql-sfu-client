@@ -24,9 +24,9 @@ export default class SoundMeter {
       //     strength += Math.abs(v - 128)
       // })
       if (this.callback) {
-        console.log(`${this.dataArray[0]}  ${this.dataArray[1]}  ${this.dataArray[2]}  ${this.dataArray[3]}  ${this.dataArray[4]}  ${this.dataArray[5]}  ${this.dataArray[6]}  ${this.dataArray[7]}
-          ${this.dataArray[8]}  ${this.dataArray[9]}  ${this.dataArray[10]}  ${this.dataArray[11]}  ${this.dataArray[12]}  ${this.dataArray[13]}  ${this.dataArray[14]}  ${this.dataArray[15]}  ${this.dataArray[16]}`)
-        this.callback(this.dataArray[3])
+        // console.log(`${this.dataArray[0]}  ${this.dataArray[1]}  ${this.dataArray[2]}  ${this.dataArray[3]}  ${this.dataArray[4]}  ${this.dataArray[5]}  ${this.dataArray[6]}  ${this.dataArray[7]}
+        //   ${this.dataArray[8]}  ${this.dataArray[9]}  ${this.dataArray[10]}  ${this.dataArray[11]}  ${this.dataArray[12]}  ${this.dataArray[13]}  ${this.dataArray[14]}  ${this.dataArray[15]}`)
+        this.callback(this.dataArray[4])
       }
     }, frequency)
   }
