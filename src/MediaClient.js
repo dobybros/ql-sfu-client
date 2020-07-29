@@ -24,6 +24,11 @@ const TRANSPORT_STATUS_CLOSED = 106;
 const TRANSPORT_STATUS_ACTIVE_CLOSE = 107;
 const TRANSPORT_STATUS_RETRY_CLOSE = 108;
 
+// peer type
+const PEER_TYPE_HAS_STREAM = 1;
+const PEER_TYPE_HAS_NOT_STREAM = 2;   // 面向建联过程发流，例如对接app的screenshare功能
+const PEER_TYPE_RECEIVING = 3;
+
 // result error code
 const RESULT_ERROR_CODE_CANNOT_FIND_TRANSPORT = 2011;
 
@@ -98,15 +103,7 @@ export default class MediaClient {
     logger.info("send media, peerId : " + peerId + ", trackMap : " + trackMap + ", bandwidth : " + bandwidth + ", recvTerminals : " + recvInfo);
     if (peerId) {
       // 创建peer
-      let peer = this._peerMap.get(peerId);
-      if (peer) {
-        this._releasePeer(peerId, null, true);
-      }
-      peer = this._createPeer(peerId, true);
-      if (recvInfo) {
-        peer.recvTerminals = recvInfo.recvTerminals;
-      }
-      peer.bandwidth = bandwidth;
+      let peer = this._createSendPeer(peerId, PEER_TYPE_HAS_STREAM, bandwidth, recvInfo);
       if (trackMap && trackMap.size > 0) {
         for (let trackId of trackMap.keys()) {
           peer.trackMap.set(trackId, trackMap.get(trackId))
@@ -130,7 +127,7 @@ export default class MediaClient {
    * @param peerId 必传，这路流的id
    * @param trackId 必传，要添加或更新的trackId，对应sendMedia方法中trackMap中的key
    * @param newTrack 要添加或更新的track
-   * @param newBandwidth 更新该track需要的带宽，不传则保持原来带宽不变
+   * @param newBandwidth 更新该路transport需要的带宽，不传则保持原来带宽不变
    * @param resultCallback 调用此方法是否成功
    * @param recvInfo 此路视频接收信息，传null保持不变，若此参数不为null，并且参数中的recvTerminals为null，则发给所有人
    *  {
@@ -520,6 +517,128 @@ export default class MediaClient {
     this._close();
   }
 
+  /* --------------------------- 面向过程发流（开始） -------------------------- */
+
+  /**
+   * 客户端直接获取rptCapabilities
+   * @param peerId 这路流的唯一标识
+   * @param bandwidth 带宽
+   * @param recvInfo 此路视频接收信息，传null保持不变，若此参数不为null，并且参数中的recvTerminals为null，则发给所有人
+   * {
+   *   recvTerminals : [1, 3455]
+   * }
+   * @param resultCallback 获取到RTPCapability后回调给用户
+   * (true, {bilities : bilities})
+   * @param mediaCloseCallback peer关闭后的回调
+   */
+  getRtpCapability(peerId, bandwidth, recvInfo, resultCallback, mediaCloseCallback) {
+    logger.info("get rtp capability, peerId : " + peerId + ", bandwidth : " + bandwidth + ", recvTerminals : " + recvInfo);
+    if (peerId && resultCallback) {
+      // 创建peer
+      let peer = this._createSendPeer(peerId, PEER_TYPE_HAS_NOT_STREAM, bandwidth, recvInfo);
+      peer.getRtpCapabilityCallback = resultCallback;
+      peer.mediaCloseCallback = mediaCloseCallback;
+      // 发送流
+      this._sendPeer(peerId);
+    } else {
+      logger.error("send media failed, param error, peerId : " + peerId);
+      if (resultCallback) {
+        resultCallback(false, "param error.");
+      }
+    }
+  }
+
+  /**
+   * 客户端直接创建transport
+   * @param peerId 这路流的唯一标识
+   * @param rtpCapability 客户端的device的能力
+   * @param resultCallback 创建transport的callback
+   * (true, {
+        id : id,
+        iceParameters : iceParameters,
+        iceCandidates : iceCandidates,
+        dtlsParameters : dtlsParameters,
+        sctpParameters : sctpParameters
+   * })
+   */
+  createSendTransport(peerId, rtpCapability, resultCallback) {
+    logger.info("create send transport, peerId : " + peerId + ", rtpCapability : " + rtpCapability);
+    if (peerId && rtpCapability) {
+      let peer = this._peerMap.get(peerId);
+      if (peer) {
+        peer.createTransportCallback = resultCallback;
+        peer.device = {rtpCapabilities : rtpCapability};
+      }
+      this._sendCreateTransportMsg(peerId);
+    } else {
+      if (resultCallback)
+        resultCallback(false, "param error");
+    }
+  }
+
+  /**
+   * 连接transport
+   * @param peerId 这路流的唯一id
+   * @param dtlsParameters 连接需要的参数
+   * @param resultCallback (true)
+   */
+  connectTransport(peerId, dtlsParameters, resultCallback) {
+    logger.info("connect send transport, peerId : " + peerId + ", dtlsParameters : " + dtlsParameters);
+    if (peerId && dtlsParameters) {
+      let peer = this._peerMap.get(peerId);
+      if (peer) {
+        peer.status = PEER_STATUS_CONNECTED;
+        try {
+          this._sendConnectTransportMsg(peerId, dtlsParameters);
+          if (resultCallback)
+            resultCallback(true)
+        } catch (e) {
+          if (resultCallback) {
+            logger.error("connect send transport error, " + e);
+            resultCallback(false, e)
+          }
+        }
+      } else {
+        if (resultCallback) {
+          logger.error("connect send transport error, can not find peer");
+          resultCallback(false, "can not find peer, when connect transport")
+        }
+      }
+
+    } else {
+      if (resultCallback) {
+        logger.error("connect send transport error, params error");
+        resultCallback(false, "params error")
+      }
+    }
+  }
+
+  /**
+   * 客户端直接创建producer
+   * @param peerId 这路流的唯一id
+   * @param producerClientId 这个producer的客户端id
+   * @param kind 这个producer的kind
+   * @param rtpParameters
+   * @param resultCallback (true, {id : producerId})
+   */
+  createProducer(peerId, producerClientId, kind, rtpParameters, resultCallback) {
+    logger.info("create producer, peerId : " + peerId + ", rtpParameters : " + rtpParameters);
+    if (peerId && producerClientId && rtpParameters) {
+      let peer = this._peerMap.get(peerId);
+      if (peer) {
+        peer.producerClientId = resultCallback
+      }
+      this._sendProduceMsg(peerId, producerClientId, kind, rtpParameters, null);
+    } else {
+      if (resultCallback) {
+        logger.error("create producer error, params error");
+        resultCallback(false, "params error")
+      }
+    }
+  }
+
+  /* --------------------------- 面向过程发流（结束） -------------------------- */
+
   _close() {
     this._closeIM();
     if (this._peerMap && this._peerMap.size > 0) {
@@ -563,12 +682,30 @@ export default class MediaClient {
     this._imConnected = false;
   }
 
-  _createPeer(peerId, isProducer) {
+  _createSendPeer(peerId, peerType, bandwidth, recvInfo) {
+    if (peerId) {
+      // 创建peer
+      let peer = this._peerMap.get(peerId);
+      if (peer) {
+        this._releasePeer(peerId, null, true);
+      }
+      peer = this._createPeer(peerId, true, peerType);
+      if (recvInfo) {
+        peer.recvTerminals = recvInfo.recvTerminals;
+      }
+      peer.bandwidth = bandwidth;
+      return peer
+    }
+    return null
+  }
+
+  _createPeer(peerId, isProducer, type) {
     let peer = this._peerMap.get(peerId);
     if (!peer) {
       peer = {
         peerId : peerId,
         isProducer : isProducer,
+        type : type,
         status : PEER_STATUS_INIT,
         transportStatus : TRANSPORT_STATUS_INIT,
         audioPause : false,
@@ -622,128 +759,126 @@ export default class MediaClient {
   async _createTransport(peerId, id, iceParameters, iceCandidates, dtlsParameters, sctpParameters) {
     let peer = this._peerMap.get(peerId);
     peer.transportId = id;
-    if (peer.isProducer) {
-      let sendTransport;
-      try {
-        sendTransport = peer.device.createSendTransport({
+    if (peer.type === PEER_TYPE_HAS_NOT_STREAM) {
+      if (peer.createTransportCallback) {
+        peer.createTransportCallback(true, {
           id : id,
-          iceCandidates : iceCandidates,
           iceParameters : iceParameters,
+          iceCandidates : iceCandidates,
           dtlsParameters : dtlsParameters,
-          sctpParameters : sctpParameters,
-          iceServers : this._turns
-        });
-      } catch (e) {
-        logger.error("peer" + peerId + " create ms send transport error, eMsg: " + e);
-        throw e;
+          sctpParameters : sctpParameters
+        })
       }
-      peer.transport = sendTransport;
-      sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
-        peer.status = PEER_STATUS_CONNECTED;
+    } else {
+      if (peer.isProducer) {
+        let sendTransport;
         try {
-          this._sendConnectTransportMsg(peerId, dtlsParameters, (result) => {
-            if (result && result.data && result.data.code && result.data.code === RESULT_ERROR_CODE_CANNOT_FIND_TRANSPORT) {
-              let peer = this._peerMap.get(peerId);
-              if (peer) {
-                this._releasePeer(peerId, null, peer.isProducer === false);
-              }
-            }
+          sendTransport = peer.device.createSendTransport({
+            id : id,
+            iceCandidates : iceCandidates,
+            iceParameters : iceParameters,
+            dtlsParameters : dtlsParameters,
+            sctpParameters : sctpParameters,
+            iceServers : this._turns
           });
-          callback();
         } catch (e) {
-          errback(e);
+          logger.error("peer" + peerId + " create ms send transport error, eMsg: " + e);
+          throw e;
         }
-      });
-      sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
-        try {
-          let producePeerId = appData.peerId;
-          let appTrackId = appData.trackId;
-          logger.info(`peer ${producePeerId} kind ${kind} on produced`);
-          let producePeer = this._peerMap.get(producePeerId);
-          if (producePeer) {
-            let shouldReleaseProducer = false;
-            let shouldReProduce = false;
-            let produceTrackId = undefined;
-            let allUsingTrackId = producePeer[`using${kind}trackId`];
-            let connectingTrackId = producePeer[`connecting${kind}trackId`];
-            if (allUsingTrackId && connectingTrackId) {
-              let arr = allUsingTrackId.split("&&");
-              let usingTrackId = arr[0];
-              if (connectingTrackId === appTrackId) {
-                if (connectingTrackId === usingTrackId) {
-                  this._sendProduceMsg(producePeerId, appTrackId + kind, kind, rtpParameters, {trackInfo : appData.trackInfo});
-                  this._callbackMap.set(appTrackId, callback);
+        peer.transport = sendTransport;
+        sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+          peer.status = PEER_STATUS_CONNECTED;
+          try {
+            this._sendConnectTransportMsg(peerId, dtlsParameters);
+            callback();
+          } catch (e) {
+            errback(e);
+          }
+        });
+        sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
+          try {
+            let producePeerId = appData.peerId;
+            let appTrackId = appData.trackId;
+            logger.info(`peer ${producePeerId} kind ${kind} on produced`);
+            let producePeer = this._peerMap.get(producePeerId);
+            if (producePeer) {
+              let shouldReleaseProducer = false;
+              let shouldReProduce = false;
+              let produceTrackId = undefined;
+              let allUsingTrackId = producePeer[`using${kind}trackId`];
+              let connectingTrackId = producePeer[`connecting${kind}trackId`];
+              if (allUsingTrackId && connectingTrackId) {
+                let arr = allUsingTrackId.split("&&");
+                let usingTrackId = arr[0];
+                if (connectingTrackId === appTrackId) {
+                  if (connectingTrackId === usingTrackId) {
+                    this._sendProduceMsg(producePeerId, appTrackId + kind, kind, rtpParameters, {trackInfo : appData.trackInfo});
+                    this._callbackMap.set(appTrackId, callback);
+                  } else {
+                    logger.warn(`peer ${producePeerId} produce error, connecting trackId ${connectingTrackId} is not using trackId ${usingTrackId}`);
+                    shouldReleaseProducer = true;
+                    shouldReProduce = true;
+                    produceTrackId = arr[1];
+                  }
                 } else {
-                  logger.warn(`peer ${producePeerId} produce error, connecting trackId ${connectingTrackId} is not using trackId ${usingTrackId}`);
+                  logger.warn(`peer ${producePeerId} produce error, appdata.trackId ${appTrackId} != connectingTrackId ${connectingTrackId}`);
                   shouldReleaseProducer = true;
-                  shouldReProduce = true;
-                  produceTrackId = arr[1];
                 }
               } else {
-                logger.warn(`peer ${producePeerId} produce error, appdata.trackId ${appTrackId} != connectingTrackId ${connectingTrackId}`);
+                logger.warn(`peer ${producePeerId} produce error, using trackId or connecting trackId is null, using ${allUsingTrackId}, connectingTrackId ${connectingTrackId}`);
                 shouldReleaseProducer = true;
               }
+              if (shouldReleaseProducer === true) {
+                callback({id : appTrackId});
+                if (appTrackId === producePeer[`connecting${kind}trackId`]) {
+                  producePeer[`connecting${kind}trackId`] = undefined;
+                }
+                this._releaseProducer(producePeerId, null, appTrackId, false);
+              }
+              if (shouldReProduce) {
+                this._produceTrack(producePeerId, produceTrackId)
+              }
             } else {
-              logger.warn(`peer ${producePeerId} produce error, using trackId or connecting trackId is null, using ${allUsingTrackId}, connectingTrackId ${connectingTrackId}`);
-              shouldReleaseProducer = true;
+              errback(new Error(`peer ${producePeerId} is null when on produce ${kind}.`));
             }
-            if (shouldReleaseProducer === true) {
-              callback({id : appTrackId});
-              if (appTrackId === producePeer[`connecting${kind}trackId`]) {
-                producePeer[`connecting${kind}trackId`] = undefined;
-              }
-              this._releaseProducer(producePeerId, null, appTrackId, false);
-            }
-            if (shouldReProduce) {
-              this._produceTrack(producePeerId, produceTrackId)
-            }
-          } else {
-            errback(new Error(`peer ${producePeerId} is null when on produce ${kind}.`));
+          } catch (error) {
+            errback(error);
           }
-        } catch (error) {
-          errback(error);
-        }
-      });
-      sendTransport.on('connectionstatechange', (connectionState) => {
-        logger.info("sender " + peerId + " connection state change to " + connectionState);
-        this._handleTransportStatus(peerId, sendTransport.id, connectionState);
-      });
-      await this._createProducers(peerId);
-    } else {
-      let recvTransport;
-      try {
-        recvTransport= peer.device.createRecvTransport({
-          id : id,
-          iceParameters : iceParameters,
-          iceCandidates : iceCandidates,
-          dtlsParameters : dtlsParameters,
-          sctpParameters : sctpParameters,
-          iceServers : this._turns
         });
-      } catch (e) {
-        logger.error("peer" + peerId + " create ms send transport error, eMsg: " + e);
-        throw e;
-      }
-      peer.transport = recvTransport;
-      recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+        sendTransport.on('connectionstatechange', (connectionState) => {
+          logger.info("sender " + peerId + " connection state change to " + connectionState);
+          this._handleTransportStatus(peerId, sendTransport.id, connectionState);
+        });
+        await this._createProducers(peerId);
+      } else {
+        let recvTransport;
         try {
-          this._sendConnectTransportMsg(peerId, dtlsParameters, (result) => {
-            if (result && result.data && result.data.code && result.data.code === RESULT_ERROR_CODE_CANNOT_FIND_TRANSPORT) {
-              let peer = this._peerMap.get(peerId);
-              if (peer) {
-                this._releasePeer(peerId, null, peer.isProducer === false);
-              }
-            }
+          recvTransport= peer.device.createRecvTransport({
+            id : id,
+            iceParameters : iceParameters,
+            iceCandidates : iceCandidates,
+            dtlsParameters : dtlsParameters,
+            sctpParameters : sctpParameters,
+            iceServers : this._turns
           });
-          callback();
         } catch (e) {
-          errback(e);
+          logger.error("peer" + peerId + " create ms send transport error, eMsg: " + e);
+          throw e;
         }
-      });
-      recvTransport.on('connectionstatechange', (connectionState) => {
-        logger.info("receiver " + peerId + " connection state change to " + connectionState);
-        this._handleTransportStatus(peerId, recvTransport.id, connectionState);
-      });
+        peer.transport = recvTransport;
+        recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+          try {
+            this._sendConnectTransportMsg(peerId, dtlsParameters);
+            callback();
+          } catch (e) {
+            errback(e);
+          }
+        });
+        recvTransport.on('connectionstatechange', (connectionState) => {
+          logger.info("receiver " + peerId + " connection state change to " + connectionState);
+          this._handleTransportStatus(peerId, recvTransport.id, connectionState);
+        });
+      }
     }
   }
 
@@ -1020,6 +1155,9 @@ export default class MediaClient {
       this._closeAudioMeter(peerId);
       if (peer.isProducer === false && deletePeer && deletePeer === true && this._receiverClosedCallback)
         this._receiverClosedCallback(peerId);
+      // 客户端直接建联时的关闭的callback
+      if (peer.mediaCloseCallback)
+        peer.mediaCloseCallback();
     }
   }
 
@@ -1252,7 +1390,7 @@ export default class MediaClient {
             logger.info("can receive peerId : " + peerId);
             let peer = this._peerMap.get(peerId);
             if (!peer || peer.status === PEER_STATUS_INIT) {
-              this._createPeer(peerId, false);
+              this._createPeer(peerId, false, PEER_TYPE_RECEIVING);
               if (this._newReceiverCallback)
                 this._newReceiverCallback(peerId);
             }
@@ -1266,18 +1404,18 @@ export default class MediaClient {
         if (code) {
           needReconnect = true;
         } else {
-          try {
-            await this._loadDevice(peerId, bilities);
-            this._sendCreateTransportMsg(peerId, (result) => {
-              if (result && result.data && result.data.code && result.data.code === RESULT_ERROR_CODE_CANNOT_FIND_TRANSPORT) {
-                let peer = this._peerMap.get(peerId);
-                if (peer) {
-                  this._releasePeer(peerId, null, peer.isProducer === false);
-                }
-              }
-            });
-          } catch (e) {
-            needReconnect = true;
+          let peer = this._peerMap.get(peerId);
+          if (peer && peer.type === PEER_TYPE_HAS_NOT_STREAM) {
+            if (peer.getRtpCapabilityCallback) {
+              peer.getRtpCapabilityCallback(true, {bilities : bilities})
+            }
+          } else {
+            try {
+              await this._loadDevice(peerId, bilities);
+              this._sendCreateTransportMsg(peerId);
+            } catch (e) {
+              needReconnect = true;
+            }
           }
         }
         if (needReconnect === true) {
@@ -1302,54 +1440,63 @@ export default class MediaClient {
       case "credProducer" : {
         const {peerId, producerId, producerClientId} = content;
         if (peerId && producerId && producerClientId) {
-          const length = producerClientId.length;
-          let kind = producerClientId.substring(length - 5);
-          let trackId = producerClientId.substr(0, length - 5);
-          let callback = this._callbackMap.get(trackId);
-          let error = undefined;
-          let shouldReProduce = false;
-          let produceTrackId = undefined;
-          this._callbackMap.delete(trackId);
           let peer = this._peerMap.get(peerId);
-          if (peer && callback) {
-            let connectingTrackId = peer[`connecting${kind}trackId`];
-            if (connectingTrackId && connectingTrackId === trackId) {
-              let allUsingTrackId = peer[`using${kind}trackId`];
-              if (allUsingTrackId) {
-                let arr = allUsingTrackId.split("&&");
-                let usingTrackId = arr[0];
-                if (usingTrackId !== trackId) {
-                  produceTrackId = arr[1];
-                  shouldReProduce = true;
-                  error = new Error(`param error, using trackId ${usingTrackId} producerClientId ${trackId}`);
-                }
-              } else {
-                error = new Error(`param error, using trackId is null`);
+          if (peer) {
+            if (peer.type === PEER_TYPE_HAS_NOT_STREAM) {
+              let callback = peer[producerClientId];
+              if (callback) {
+                callback(true, {id: producerId})
               }
             } else {
-              error = new Error(`param error, connecting trackId ${connectingTrackId} != trackId ${trackId}`);
+              const length = producerClientId.length;
+              let kind = producerClientId.substring(length - 5);
+              let trackId = producerClientId.substr(0, length - 5);
+              let callback = this._callbackMap.get(trackId);
+              let error = undefined;
+              let shouldReProduce = false;
+              let produceTrackId = undefined;
+              this._callbackMap.delete(trackId);
+              if (peer && callback) {
+                let connectingTrackId = peer[`connecting${kind}trackId`];
+                if (connectingTrackId && connectingTrackId === trackId) {
+                  let allUsingTrackId = peer[`using${kind}trackId`];
+                  if (allUsingTrackId) {
+                    let arr = allUsingTrackId.split("&&");
+                    let usingTrackId = arr[0];
+                    if (usingTrackId !== trackId) {
+                      produceTrackId = arr[1];
+                      shouldReProduce = true;
+                      error = new Error(`param error, using trackId ${usingTrackId} producerClientId ${trackId}`);
+                    }
+                  } else {
+                    error = new Error(`param error, using trackId is null`);
+                  }
+                } else {
+                  error = new Error(`param error, connecting trackId ${connectingTrackId} != trackId ${trackId}`);
+                }
+              } else {
+                error = new Error("peer is null or callback is null");
+              }
+              if (callback) {
+                callback({id : producerId});
+              }
+              if (error) {
+                logger.error(`peer ${peerId} create ${kind} producer error, eMsg : ${error}`);
+                this._releaseProducer(peerId, null, producerId, true);
+              }
+              if (peer) {
+                let connectingTrackId = peer[`connecting${kind}trackId`];
+                if (connectingTrackId && connectingTrackId === trackId) {
+                  logger.info(`will release connecting track, peer ${peerId} ${kind} connectingTrackId ${connectingTrackId}`);
+                  peer[`connecting${kind}trackId`] = undefined;
+                } else {
+                  logger.warn(`can not release connecting trackId when created producer, because peer ${peerId} ${kind} connecting trackId ${connectingTrackId}`);
+                }
+              }
+              if (shouldReProduce === true) {
+                this._produceTrack(peerId, produceTrackId);
+              }
             }
-          } else {
-            error = new Error("peer is null or callback is null");
-          }
-          if (callback) {
-            callback({id : producerId});
-          }
-          if (error) {
-            logger.error(`peer ${peerId} create ${kind} producer error, eMsg : ${error}`);
-            this._releaseProducer(peerId, null, producerId, true);
-          }
-          if (peer) {
-            let connectingTrackId = peer[`connecting${kind}trackId`];
-            if (connectingTrackId && connectingTrackId === trackId) {
-              logger.info(`will release connecting track, peer ${peerId} ${kind} connectingTrackId ${connectingTrackId}`);
-              peer[`connecting${kind}trackId`] = undefined;
-            } else {
-              logger.warn(`can not release connecting trackId when created producer, because peer ${peerId} ${kind} connecting trackId ${connectingTrackId}`);
-            }
-          }
-          if (shouldReProduce === true) {
-            this._produceTrack(peerId, produceTrackId);
           }
         }
       }
@@ -1414,7 +1561,7 @@ export default class MediaClient {
     }
   }
 
-  _sendCreateTransportMsg(peerId, resultCallback) {
+  _sendCreateTransportMsg(peerId) {
     if (this._filterIM(peerId) === true) {
       let peer = this._peerMap.get(peerId);
       if (peer) {
@@ -1424,21 +1571,35 @@ export default class MediaClient {
           isProduce : peer.isProducer,
           rtpCapabilities : peer.device.rtpCapabilities,
           maxIncomingBitrate : peer.bandwidth
-        }, resultCallback);
+        }, (result) => {
+          if (result && result.data && result.data.code && result.data.code === RESULT_ERROR_CODE_CANNOT_FIND_TRANSPORT) {
+            let peer = this._peerMap.get(peerId);
+            if (peer) {
+              this._releasePeer(peerId, null, peer.isProducer === false);
+            }
+          }
+        });
       } else {
         logger.warn(`peer ${peerId} want send create transport message, but peer not exist.`)
       }
     }
   }
 
-  _sendConnectTransportMsg(peerId, dtlsParameters, resultCallback) {
+  _sendConnectTransportMsg(peerId, dtlsParameters) {
     if (this._filterIM(peerId) === true) {
       let peer = this._peerMap.get(peerId);
       if (peer) {
         this._sendMessage("contran", {
           peerId : peerId,
           isProduce : peer.isProducer,
-          dtlsParameters : dtlsParameters}, resultCallback);
+          dtlsParameters : dtlsParameters}, (result) => {
+          if (result && result.data && result.data.code && result.data.code === RESULT_ERROR_CODE_CANNOT_FIND_TRANSPORT) {
+            let peer = this._peerMap.get(peerId);
+            if (peer) {
+              this._releasePeer(peerId, null, peer.isProducer === false);
+            }
+          }
+        });
       } else {
         logger.warn(`peer ${peerId} want send connect transport message, but peer not exist.`)
       }
