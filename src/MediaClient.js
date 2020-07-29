@@ -531,7 +531,7 @@ export default class MediaClient {
    * (true, {bilities : bilities})
    * @param mediaCloseCallback peer关闭后的回调
    */
-  getRtpCapability(peerId, bandwidth, recvInfo, resultCallback, mediaCloseCallback) {
+  getRtpCapability({peerId, bandwidth, recvInfo, resultCallback, mediaCloseCallback}) {
     logger.info("get rtp capability, peerId : " + peerId + ", bandwidth : " + bandwidth + ", recvTerminals : " + recvInfo);
     if (peerId && resultCallback) {
       // 创建peer
@@ -561,7 +561,7 @@ export default class MediaClient {
         sctpParameters : sctpParameters
    * })
    */
-  createSendTransport(peerId, rtpCapability, resultCallback) {
+  createSendTransport({peerId, rtpCapability, resultCallback}) {
     logger.info("create send transport, peerId : " + peerId + ", rtpCapability : " + rtpCapability);
     if (peerId && rtpCapability) {
       let peer = this._peerMap.get(peerId);
@@ -582,7 +582,7 @@ export default class MediaClient {
    * @param dtlsParameters 连接需要的参数
    * @param resultCallback (true)
    */
-  connectTransport(peerId, dtlsParameters, resultCallback) {
+  connectTransport({peerId, dtlsParameters, resultCallback}) {
     logger.info("connect send transport, peerId : " + peerId + ", dtlsParameters : " + dtlsParameters);
     if (peerId && dtlsParameters) {
       let peer = this._peerMap.get(peerId);
@@ -621,7 +621,7 @@ export default class MediaClient {
    * @param rtpParameters
    * @param resultCallback (true, {id : producerId})
    */
-  createProducer(peerId, producerClientId, kind, rtpParameters, resultCallback) {
+  createProducer({peerId, producerClientId, kind, rtpParameters, resultCallback}) {
     logger.info("create producer, peerId : " + peerId + ", rtpParameters : " + rtpParameters);
     if (peerId && producerClientId && rtpParameters) {
       let peer = this._peerMap.get(peerId);
