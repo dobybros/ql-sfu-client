@@ -1099,7 +1099,7 @@ export default class MediaClient {
 
   _releasePeer(peerId, transportId, deletePeer) {
     let peer = this._peerMap.get(peerId);
-    if (peer && (!transportId || (peer.transport && transportId === peer.transport.id))) {
+    if (peer && (!transportId || (peer.transport && transportId === peer.transport.id) || transportId === peer.transportId)) {
       if (deletePeer && deletePeer === true) {
         this._peerMap.delete(peerId);
         peer.trackMap.clear();
@@ -1114,6 +1114,7 @@ export default class MediaClient {
         } catch (e) {}
       }
       peer.transport = null;
+      peer.transportId = undefined;
       if (peer.isProducer === true) {
         if (peer.producerMap.size > 0) {
           for (let trackId of peer.producerMap.keys()) {
@@ -1422,13 +1423,15 @@ export default class MediaClient {
         if (needReconnect === true) {
           let peer = this._peerMap.get(peerId);
           if (peer) {
-            if (peer.transport) {
-              this._sendTransportStatusChangedMsg(peerId, peer.transport.id, TRANSPORT_STATUS_RETRY_CLOSE);
+            if (peer.transport || peer.transportId) {
+              this._sendTransportStatusChangedMsg(peerId, peer.transport ? peer.transport.id : peer.transportId, TRANSPORT_STATUS_RETRY_CLOSE);
             }
             this._releasePeer(peerId, null, false);
-            setTimeout(() => {
-              this._getRouterRtpCapability(peerId);
-            }, 1000);
+            if (peer.type !== PEER_TYPE_HAS_NOT_STREAM) {
+              setTimeout(() => {
+                this._getRouterRtpCapability(peerId);
+              }, 1000);
+            }
           }
         }
       }
