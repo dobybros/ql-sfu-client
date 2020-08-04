@@ -365,7 +365,7 @@ export default class MediaClient {
       let peer = this._peerMap.get(peerId);
       if (peer) {
         peer.mediaCloseCallback = undefined;
-        this._sendTransportStatusChangedMsg(peerId, peer.transport ? peer.transport.id : null, TRANSPORT_STATUS_ACTIVE_CLOSE);
+        this._sendTransportStatusChangedMsg(peerId, peer.transport ? peer.transport.id : peer.transportId, TRANSPORT_STATUS_ACTIVE_CLOSE);
         this._releasePeer(peerId, null, true);
       }
     }
