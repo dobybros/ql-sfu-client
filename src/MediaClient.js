@@ -627,7 +627,7 @@ export default class MediaClient {
     if (peerId && producerClientId && rtpParameters) {
       let peer = this._peerMap.get(peerId);
       if (peer) {
-        peer.producerClientId = resultCallback
+        peer[producerClientId] = resultCallback
       }
       this._sendProduceMsg(peerId, producerClientId, kind, rtpParameters, null);
     } else {
