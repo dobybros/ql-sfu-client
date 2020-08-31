@@ -1685,14 +1685,18 @@ export default class MediaClient {
   }
 
   _sendMessage(contentType, content, resultCallback) {
-    this._imClient.send({
-      id : uuid(),
-      type : 16,
-      service : SERVICE,
-      contentType : contentType,
-      contentEncode : 2,
-      content : content
-    }, resultCallback)
+    if (this._imClient) {
+      this._imClient.send({
+        id : uuid(),
+        type : 16,
+        service : SERVICE,
+        contentType : contentType,
+        contentEncode : 2,
+        content : content
+      }, resultCallback)
+    } else {
+      logger.warn(`imClient is null when send messageType: ${contentType} message: ${content}`)
+    }
   }
 
   _initPeerStatsLog() {
