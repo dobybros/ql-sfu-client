@@ -212,9 +212,11 @@ export default class BeautifyVideoClient {
     if (this._mediaStreamCallBack) {
       try {
         if (this._shouldSendOriginVideo === true) {
-          this._mediaStreamCallBack(mediaStream)
+          if (this._originVideo && this._originVideo.srcObject)
+          this._mediaStreamCallBack(this._originVideo.srcObject)
         } else {
-          this._mediaStreamCallBack(this._showCanvas.captureStream(this._frameRate))
+          if (this._showCanvas)
+            this._mediaStreamCallBack(this._showCanvas.captureStream(this._frameRate))
         }
       } catch (e) {
         logger.error(`call mediaStream error, eMsg: ${e}`)
