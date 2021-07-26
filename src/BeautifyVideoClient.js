@@ -29,12 +29,11 @@ export default class BeautifyVideoClient {
    * @param canvas 更换显示的canvas
    * @param frameRate 更换获取的帧数
    */
-  upsertParams({videoTrack, canvas, frameRate}) {
-    logger.info(`reset params mediaStream ${videoTrack} canvas ${canvas} frameRate ${frameRate}`)
+  upsertParams({mediaStream, canvas, frameRate}) {
+    logger.info(`reset params mediaStream ${mediaStream} canvas ${canvas} frameRate ${frameRate}`)
     let shouldReCapture = false
-    if (videoTrack) {
-      let videoTrackCopy = videoTrack.clone()
-      this._originVideo.srcObject = (new MediaStream()).addTrack(videoTrackCopy)
+    if (mediaStream) {
+      this._originVideo.srcObject = mediaStream
       shouldReCapture = true
     }
     if (canvas) {
