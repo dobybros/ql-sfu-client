@@ -336,7 +336,7 @@ export default class BeautifyVideoClient {
         let l = frame.data.length / 4;
         if (this._shouldDrawBack === true) {
           for (let i = 0; i < l; i++) {
-            let r = frame.data[i * 4 + 0];
+            let r = frame.data[i * 4];
             let g = frame.data[i * 4 + 1];
             let b = frame.data[i * 4 + 2];
             let hslResult = this._rgbToHsl(r, g, b)
@@ -346,13 +346,17 @@ export default class BeautifyVideoClient {
               && (hslResult.s >= this._availbleS[0] && hslResult.s <= this._availbleS[1])
               && (hslResult.l >= this._availbleL[0] && hslResult.l <= this._availbleL[1])
             ) {
-              frame.data[i * 4 + 0] = this._imageFrame.data[i * 4 + 0];
+              frame.data[i * 4] = this._imageFrame.data[i * 4];
               frame.data[i * 4 + 1] = this._imageFrame.data[i * 4 + 1];
               frame.data[i * 4 + 2] = this._imageFrame.data[i * 4 + 2];
             }
           }
         }
-        this._showCanvasCtx.putImageData(frame, 0, 0, 0, 0, this._showCanvas.width, this._showCanvas.height);
+        this._handleVideoCanvasCtx.clearRect(0, 0, this._handleVideoCanvas.width, this._handleVideoCanvas.height);
+        this._handleVideoCanvasCtx.putImageData(frame, 0, 0);
+        this._showCanvasCtx.clearRect(0, 0, this._showCanvas.width, this._showCanvas.height);
+        this._showCanvasCtx.drawImage(this._handleVideoCanvas, 0, 0, this._showCanvas.width, this._showCanvas.height)
+        // this._showCanvasCtx.putImageData(frame, 0, 0, 0, 0, this._showCanvas.width, this._showCanvas.height);
       }
     }
   }
