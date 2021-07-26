@@ -378,9 +378,16 @@ export default class BeautifyVideoClient {
     let gCount = 0
     let bCount = 0
 
+    let canvasW = this._showCanvas.width
+    let canvasH = this._showCanvas.height
+    let canvasSW = parseInt(this._showCanvas.style.width.replace("px", ""))
+    let canvasSH = parseInt(this._showCanvas.style.width.replace("px", ""))
+
     let round = 6
     let offset = round * round/2
-    let frame = this._showCanvasCtx.getImageData((event.offsetX - offset) < 0 ? 0 : (event.offsetX - offset), (event.offsetY - offset) < 0 ? 0 : (event.offsetY - offset), round, round)
+    let x = event.offsetX * (canvasW/canvasSW) - offset
+    let y = event.offsetY * (canvasH/canvasSH) - offset
+    let frame = this._showCanvasCtx.getImageData(x < 0 ? 0 : x, y < 0 ? 0 : y, round, round)
     let l = frame.data.length / 4;
     for (let i = 0; i < l; i++) {
       rCount += frame.data[i * 4 + 0];
