@@ -232,7 +232,7 @@ export default class BeautifyVideoClient {
         break
       case REPLACE_BACKGROUND_TYPE_IMAGE:
         if (this._shouldReplaceColor === true) {
-          this._handleImageCanvasCtx.clearRect(0, 0, this._showCanvas.width, this._showCanvas.height);
+          this._handleImageCanvasCtx.clearRect(0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
           this._handleImageCanvasCtx.drawImage(this._bkImageEle, 0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
           this._imageFrame = this._handleImageCanvasCtx.getImageData(0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
           this._shouldDrawBack = true
@@ -352,7 +352,7 @@ export default class BeautifyVideoClient {
             }
           }
         }
-        this._showCanvasCtx.putImageData(frame, 0, 0);
+        this._showCanvasCtx.putImageData(frame, 0, 0, 0, 0, this._showCanvas.width, this._showCanvas.height);
       }
     }
   }
