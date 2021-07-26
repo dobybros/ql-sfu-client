@@ -109,9 +109,7 @@ export default class BeautifyVideoClient {
     if (this._replaceType === REPLACE_BACKGROUND_TYPE_IMAGE && this._shouldReplaceColor === true) {
       if (restoreVideo === true) {
         this._shouldDrawBack = false;
-        window.addEventListener("click", () => {
-          this._shouldDrawBack = true
-        }, {once: true})
+        window.addEventListener("click", this._resetShouldDrawBack.bind(this), {once: true})
       }
       this._showCanvas.addEventListener("click", this._updateColor.bind(this), {once: true});
     }
@@ -362,6 +360,10 @@ export default class BeautifyVideoClient {
         // this._showCanvasCtx.putImageData(frame, 0, 0, 0, 0, this._showCanvas.width, this._showCanvas.height);
       }
     }
+  }
+
+  _resetShouldDrawBack() {
+    this._shouldDrawBack = true
   }
 
   _updateColor(event) {
