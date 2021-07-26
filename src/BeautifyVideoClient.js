@@ -381,7 +381,7 @@ export default class BeautifyVideoClient {
     let canvasW = this._showCanvas.width
     let canvasH = this._showCanvas.height
     let canvasSW = parseInt(this._showCanvas.style.width.replace("px", ""))
-    let canvasSH = parseInt(this._showCanvas.style.width.replace("px", ""))
+    let canvasSH = parseInt(this._showCanvas.style.height.replace("px", ""))
 
     let round = 6
     let offset = round/2
