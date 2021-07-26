@@ -336,9 +336,12 @@ export default class BeautifyVideoClient {
         let l = frame.data.length / 4;
         if (this._shouldDrawBack === true) {
           for (let i = 0; i < l; i++) {
-            let r = frame.data[i * 4];
-            let g = frame.data[i * 4 + 1];
-            let b = frame.data[i * 4 + 2];
+            let rIndex = i * 4;
+            let gIndex = rIndex + 1;
+            let bIndex = rIndex + 2;
+            let r = frame.data[rIndex];
+            let g = frame.data[gIndex];
+            let b = frame.data[bIndex];
             let hslResult = this._rgbToHsl(r, g, b)
             if (((hslResult.h >= this._availbleH[0] && hslResult.h <= this._availbleH[1]) ||
               ((hslResult.h + 1) >= this._availbleH[0] && (hslResult.h + 1) <= this._availbleH[1]) ||
@@ -346,9 +349,9 @@ export default class BeautifyVideoClient {
               && (hslResult.s >= this._availbleS[0] && hslResult.s <= this._availbleS[1])
               && (hslResult.l >= this._availbleL[0] && hslResult.l <= this._availbleL[1])
             ) {
-              frame.data[i * 4] = this._imageFrame.data[i * 4];
-              frame.data[i * 4 + 1] = this._imageFrame.data[i * 4 + 1];
-              frame.data[i * 4 + 2] = this._imageFrame.data[i * 4 + 2];
+              frame.data[rIndex] = this._imageFrame.data[rIndex];
+              frame.data[gIndex] = this._imageFrame.data[gIndex];
+              frame.data[bIndex] = this._imageFrame.data[bIndex];
             }
           }
         }
