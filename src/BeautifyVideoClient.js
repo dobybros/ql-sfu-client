@@ -109,7 +109,9 @@ export default class BeautifyVideoClient {
     if (this._replaceType === REPLACE_BACKGROUND_TYPE_IMAGE && this._shouldReplaceColor === true) {
       if (restoreVideo === true) {
         this._shouldDrawBack = false;
-        window.addEventListener("click", this._resetShouldDrawBack.bind(this), {once: true})
+        setTimeout(() => {
+          window.addEventListener("click", this._windowOnClick)
+        }, 0)
       }
       this._showCanvas.addEventListener("click", this._updateColor.bind(this), {once: true});
     }
@@ -204,6 +206,9 @@ export default class BeautifyVideoClient {
 
     // 设置timer
     this._computeInterval = undefined
+
+    // 设置window点击事件
+    this._windowOnClick = this._resetShouldDrawBack.bind(this);
   }
 
   _refreshVideoStream() {
@@ -363,6 +368,7 @@ export default class BeautifyVideoClient {
   }
 
   _resetShouldDrawBack() {
+    window.removeEventListener("click", this._windowOnClick)
     this._shouldDrawBack = true
   }
 
