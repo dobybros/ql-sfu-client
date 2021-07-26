@@ -102,11 +102,11 @@ export default class BeautifyVideoClient {
   }
 
   /**
-   * 开始选颜色，只有用户选择了使用绿幕，并且北京市图片时才可以选择颜色
+   * 开始选颜色，只有用户选择了使用绿幕，并且背景时图片时才可以选择颜色
    * @param restoreVideo 是否要恢复视频原样
    */
   pickColor(restoreVideo = false) {
-    if (this._replaceType === REPLACE_BACKGROUND_TYPE_IMAGE && this._shouldReplaceColor === false) {
+    if (this._replaceType === REPLACE_BACKGROUND_TYPE_IMAGE && this._shouldReplaceColor === true) {
       if (restoreVideo === true) {
         this._shouldDrawBack = false;
         window.addEventListener("click", () => {
@@ -160,7 +160,7 @@ export default class BeautifyVideoClient {
     // 应不应该画背景
     this._shouldDrawBack = false
 
-    // 是否要替换颜色
+    // 是否要替换颜色（用户是否选择了绿幕）
     this._shouldReplaceColor = false
 
     // 是否应该把原来流返回去
