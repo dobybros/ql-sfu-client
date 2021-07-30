@@ -410,6 +410,8 @@ export default class MediaClient {
       if (peer) {
         let oldElement = peer[kind + "Element"];
         if (oldElement) {
+          if (oldElement === element)
+            return
           oldElement.srcObject = null
         }
         let tracks = [];
