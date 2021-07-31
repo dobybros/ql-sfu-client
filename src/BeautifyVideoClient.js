@@ -472,7 +472,7 @@ export default class BeautifyVideoClient {
   }
 
   _getStreamFrameRate(mediaStream, userDefault) {
-    if (mediaStream && mediaStream.getVideoTracks() && !mediaStream.getVideoTracks().length > 0)
+    if (mediaStream && mediaStream.getVideoTracks() && mediaStream.getVideoTracks().length > 0)
      return mediaStream.getVideoTracks()[0].getSettings().frameRate
     if (userDefault && userDefault === true)
       return DEFAULT_FRAME_RATE
@@ -480,19 +480,19 @@ export default class BeautifyVideoClient {
   }
 
   _getStreamDeviceId(mediaStream) {
-    if (mediaStream && mediaStream.getVideoTracks() && !mediaStream.getVideoTracks().length > 0)
+    if (mediaStream && mediaStream.getVideoTracks() && mediaStream.getVideoTracks().length > 0)
       return mediaStream.getVideoTracks()[0].getSettings().deviceId
     return undefined
   }
 
   _getStreamWidth(mediaStream) {
-    if (mediaStream && mediaStream.getVideoTracks() && !mediaStream.getVideoTracks().length > 0)
+    if (mediaStream && mediaStream.getVideoTracks() && mediaStream.getVideoTracks().length > 0)
       return mediaStream.getVideoTracks()[0].getSettings().width
     return undefined
   }
 
   _getStreamHeight(mediaStream) {
-    if (mediaStream && mediaStream.getVideoTracks() && !mediaStream.getVideoTracks().length > 0)
+    if (mediaStream && mediaStream.getVideoTracks() && mediaStream.getVideoTracks().length > 0)
       return mediaStream.getVideoTracks()[0].getSettings().height
     return undefined
   }
