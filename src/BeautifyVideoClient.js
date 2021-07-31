@@ -63,6 +63,7 @@ export default class BeautifyVideoClient {
       // 如果更换了canvas，就重新捕捉需要给上层的流
       this._showCanvas = canvas
       this._showCanvasCtx = this._showCanvas.getContext('2d');
+      this._shouldReCapture = true
       this._reCaptureVideoStream()
     }
   }
@@ -140,6 +141,7 @@ export default class BeautifyVideoClient {
   disappear() {
     if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE) {
       this._closeDrawColorTimer()
+      this._shouldReCapture = true
     }
     this._reCaptureVideoStream()
   }
@@ -183,6 +185,9 @@ export default class BeautifyVideoClient {
 
     // 是否应该请求动画
     this._shouldRequestAnimation = false
+
+    // 是否应该重新捕捉视频
+    this._shouldReCapture = false
 
     // 初始化色相、饱和度、亮度
     this._hValue = 1.167;
@@ -230,7 +235,8 @@ export default class BeautifyVideoClient {
   }
 
   _reCaptureVideoStream() {
-    if (this._mediaStreamCallBack) {
+    if (this._mediaStreamCallBack && this._shouldReCapture === true) {
+      this._shouldReCapture = false
       try {
         if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE) {
           this._mediaStreamCallBack(this._originMediaStream)
@@ -287,7 +293,7 @@ export default class BeautifyVideoClient {
     if (!this._computeInterval) {
       this._computeInterval = setInterval(()=>{
         this._handleVideo()
-      }, 60)
+      }, 33)
     }
   }
 
