@@ -10,6 +10,13 @@ const REPLACE_BACKGROUND_TYPE_NONE = 0    // 不替换背景
 const REPLACE_BACKGROUND_TYPE_BLUR = 1    // 模糊
 const REPLACE_BACKGROUND_TYPE_IMAGE = 2   // 替换图
 
+// 默认帧数
+const DEFAULT_FRAME_RATE = 30
+
+// 默认宽度
+const DEFAULT_WIDTH = 480
+const DEFAULT_HEIGHT = 270
+
 export default class BeautifyVideoClient {
 
   /**
@@ -26,27 +33,37 @@ export default class BeautifyVideoClient {
   /**
    * 更换参数
    * @param mediaStream 更换原始视频
-   * @param canvas 更换显示的canvas
-   * @param frameRate 更换获取的帧数
+   * @param canvas 更换展示结果的canvas
    */
-  upsertParams({mediaStream, canvas, frameRate}) {
+  upsertParams({mediaStream, canvas}) {
     logger.info(`reset params mediaStream ${mediaStream} canvas ${canvas} frameRate ${frameRate}`)
-    let shouldReCapture = false
     if (mediaStream) {
-      this._originVideo.srcObject = mediaStream
-      shouldReCapture = true
+      // 如果现存的流与原始流deviceId不一样或者帧数不一样就就重新获取流
+      let originDeviceId = this._getStreamDeviceId(mediaStream)
+      let originFrameRate = this._getStreamFrameRate(mediaStream, false)
+      let curDeviceId = this._getStreamDeviceId(this._originMediaStream)
+      let curFrameRate = this._getStreamFrameRate(this._originMediaStream, false)
+      if ((!curDeviceId || curDeviceId !== originDeviceId) || (!curFrameRate || curFrameRate !== originFrameRate)) {
+        let constraints = {
+          video : {
+            width : DEFAULT_WIDTH,
+            height : DEFAULT_HEIGHT,
+            frameRate : originFrameRate,
+            deviceId : {exact : originDeviceId}
+          },
+          audio : false
+        };
+        navigator.mediaDevices.getUserMedia(constraints).then((mediaStream) => {
+          this._originVideo.srcObject = mediaStream
+        });
+      }
+      this._originMediaStream = mediaStream
     }
-    if (canvas) {
+    if (canvas && canvas !== this._showCanvas) {
+      // 如果更换了canvas，就重新捕捉需要给上层的流
       this._showCanvas = canvas
       this._showCanvasCtx = this._showCanvas.getContext('2d');
-      shouldReCapture = true
-    }
-    if (frameRate) {
-      this._frameRate = frameRate
-      shouldReCapture = true
-    }
-    if (shouldReCapture) {
-      this._refreshVideoStream()
+      this._reCaptureVideoStream()
     }
   }
 
@@ -88,15 +105,15 @@ export default class BeautifyVideoClient {
    * @param use true: 使用, false: 不使用
    */
   useGreenScreen(use) {
-    this._shouldReplaceColor = use
+    this._useGreenScreen = use
     this._startDrawBack()
   }
 
   /**
-   * 不替换背景
+   * 使用空白背景
    */
-  clearBack() {
-    logger.info(`clear background`)
+  blankBack() {
+    logger.info(`use blank background`)
     this._replaceType = REPLACE_BACKGROUND_TYPE_NONE;
     this._startDrawBack()
   }
@@ -106,7 +123,7 @@ export default class BeautifyVideoClient {
    * @param restoreVideo 是否要恢复视频原样
    */
   pickColor(restoreVideo = false) {
-    if (this._replaceType === REPLACE_BACKGROUND_TYPE_IMAGE && this._shouldReplaceColor === true) {
+    if (this._replaceType === REPLACE_BACKGROUND_TYPE_IMAGE && this._useGreenScreen === true) {
       if (restoreVideo === true) {
         this._shouldDrawBack = false;
         setTimeout(() => {
@@ -122,10 +139,9 @@ export default class BeautifyVideoClient {
    */
   disappear() {
     if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE) {
-      this._shouldSendOriginVideo = true
       this._closeDrawColorTimer()
     }
-    this._refreshVideoStream()
+    this._reCaptureVideoStream()
   }
 
   /**
@@ -152,19 +168,21 @@ export default class BeautifyVideoClient {
 
     // 替换类型
     this._replaceType = REPLACE_BACKGROUND_TYPE_NONE;
-    this._width = 640;
-    this._height = 360;
-    this._frameRate = 30;
-    this._blurRadius = 15;
+
+    // 原视频流
+    this._originMediaStream = undefined;
 
     // 应不应该画背景
     this._shouldDrawBack = false
 
     // 是否要替换颜色（用户是否选择了绿幕）
-    this._shouldReplaceColor = false
+    this._useGreenScreen = false
 
-    // 是否应该把原来流返回去
-    this._shouldSendOriginVideo = true
+    // 是否正在请求动画
+    this._isRequestAnimation = false
+
+    // 是否应该请求动画
+    this._shouldRequestAnimation = false
 
     // 初始化色相、饱和度、亮度
     this._hValue = 1.167;
@@ -182,10 +200,10 @@ export default class BeautifyVideoClient {
 
     // 初始化处理视频的frame
     this._handleVideoCanvas = document.createElement("CANVAS");
-    this._handleVideoCanvas.width = `${this._width}`
-    this._handleVideoCanvas.height = `${this._height}`
-    this._handleVideoCanvas.style.width = `${this._width}px`
-    this._handleVideoCanvas.style.height = `${this._height}px`
+    this._handleVideoCanvas.width = `${DEFAULT_WIDTH}`
+    this._handleVideoCanvas.height = `${DEFAULT_HEIGHT}`
+    this._handleVideoCanvas.style.width = `${DEFAULT_WIDTH}px`
+    this._handleVideoCanvas.style.height = `${DEFAULT_HEIGHT}px`
     this._handleVideoCanvasCtx = this._handleVideoCanvas.getContext('2d');
 
     // 初始化需要改变的背景图
@@ -194,10 +212,10 @@ export default class BeautifyVideoClient {
 
     // 初始化处理图片的canvas
     this._handleImageCanvas = document.createElement("CANVAS");
-    this._handleImageCanvas.width = `${this._width}`
-    this._handleImageCanvas.height = `${this._height}`
-    this._handleImageCanvas.style.width = `${this._width}px`
-    this._handleImageCanvas.style.height = `${this._height}px`
+    this._handleImageCanvas.width = `${DEFAULT_WIDTH}`
+    this._handleImageCanvas.height = `${DEFAULT_HEIGHT}`
+    this._handleImageCanvas.style.width = `${DEFAULT_WIDTH}px`
+    this._handleImageCanvas.style.height = `${DEFAULT_HEIGHT}px`
     this._handleImageCanvasCtx = this._handleImageCanvas.getContext('2d');
 
     // 需要展示结果的canvas
@@ -211,15 +229,18 @@ export default class BeautifyVideoClient {
     this._windowOnClick = this._resetShouldDrawBack.bind(this);
   }
 
-  _refreshVideoStream() {
+  _reCaptureVideoStream() {
     if (this._mediaStreamCallBack) {
       try {
-        if (this._shouldSendOriginVideo === true) {
-          if (this._originVideo && this._originVideo.srcObject)
-          this._mediaStreamCallBack(this._originVideo.srcObject)
+        if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE) {
+          this._mediaStreamCallBack(this._originMediaStream)
         } else {
           if (this._showCanvas)
-            this._mediaStreamCallBack(this._showCanvas.captureStream(this._frameRate))
+            this._mediaStreamCallBack(this._showCanvas.captureStream(this._getStreamFrameRate(this._originMediaStream, true)))
+          else {
+            logger.warn(`should callback canvas, but canvas is null`)
+            this._mediaStreamCallBack(this._originMediaStream)
+          }
         }
       } catch (e) {
         logger.error(`call mediaStream error, eMsg: ${e}`)
@@ -228,31 +249,38 @@ export default class BeautifyVideoClient {
   }
 
   _startDrawBack() {
-    this._shouldSendOriginVideo = false
     switch (this._replaceType) {
       case REPLACE_BACKGROUND_TYPE_NONE:
+        this._shouldRequestAnimation = false
         this._shouldDrawBack = false
+        this._openDrawColorTimer();
         break
       case REPLACE_BACKGROUND_TYPE_IMAGE:
-        if (this._shouldReplaceColor === true) {
+        if (this._useGreenScreen === true) {
+          // 使用绿幕
           this._handleImageCanvasCtx.clearRect(0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
           this._handleImageCanvasCtx.drawImage(this._bkImageEle, 0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
           this._imageFrame = this._handleImageCanvasCtx.getImageData(0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
+          this._shouldRequestAnimation = false
           this._shouldDrawBack = true
           this._openDrawColorTimer();
         } else {
+          // 人脸识别
           this._closeDrawColorTimer()
+          this._shouldRequestAnimation = true
           this._shouldDrawBack = true;
           this._handleVideo()
         }
         break
       case REPLACE_BACKGROUND_TYPE_BLUR:
+        // 人脸识别
         this._closeDrawColorTimer()
+        this._shouldRequestAnimation = true
         this._shouldDrawBack = true;
         this._handleVideo()
         break
     }
-    this._refreshVideoStream()
+    this._reCaptureVideoStream()
   }
 
   _openDrawColorTimer() {
@@ -271,69 +299,9 @@ export default class BeautifyVideoClient {
   }
 
   _handleVideo() {
-    // 如果是模糊背景或者不应该替换颜色，就执行人脸识别
-    if ((this._replaceType === REPLACE_BACKGROUND_TYPE_BLUR || this._shouldReplaceColor === false)) {
-      if (!this._selfieSegmentation) {
-        try {
-          this._selfieSegmentation = new SelfieSegmentation({ locateFile: (file) => {
-              return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
-            }
-          });
-          this._selfieSegmentation.setOptions({
-            modelSelection: 1,
-          });
-          this._selfieSegmentation.onResults((results) => {
-            if (this._showCanvasCtx) {
-              if (this._shouldDrawBack === true) {
-                this._showCanvasCtx.save();
-                this._showCanvasCtx.clearRect(0, 0, this._showCanvas.width, this._showCanvas.height);
-                // 绘制背景
-                switch (this._replaceType) {
-                  case REPLACE_BACKGROUND_TYPE_BLUR:
-                    this._showCanvasCtx.filter = `blur(${this._blurradius}px)`
-                    this._showCanvasCtx.drawImage(results.image, 0, 0, this._showCanvas.width, this._showCanvas.height)
-                    this._showCanvasCtx.filter = "none"
-                    break
-                  case REPLACE_BACKGROUND_TYPE_IMAGE:
-                    this._showCanvasCtx.drawImage(this._bkImageEle, 0, 0, this._showCanvas.width, this._showCanvas.height)
-                    break
-                  default:
-                    break
-                }
-                // 绘制模型
-                this._showCanvasCtx.globalCompositeOperation = 'destination-out';
-                this._showCanvasCtx.drawImage(results.segmentationMask, 0, 0, this._showCanvas.width, this._showCanvas.height);
-                // 绘制人
-                this._showCanvasCtx.globalCompositeOperation = 'destination-over';
-                this._showCanvasCtx.drawImage(results.image, 0, 0, this._showCanvas.width, this._showCanvas.height);
-                this._showCanvasCtx.restore();
-              } else {
-                this._showCanvasCtx.drawImage(results.image, 0, 0, this._showCanvas.width, this._showCanvas.height);
-              }
-            }
-          });
-        } catch (e) {
-          this._selfieSegmentation = undefined
-        }
-      }
-      if (!this._camera && this._selfieSegmentation) {
-        this._camera = new Camera(this._originVideo, {
-          onFrame: async () => {
-            // 如果是模糊背景或者不应该替换颜色，并且不是发原流给用户时
-            if (this._shouldSendOriginVideo === false && (this._replaceType === REPLACE_BACKGROUND_TYPE_BLUR || this._shouldReplaceColor === false) && this._selfieSegmentation)
-              await this._selfieSegmentation.send({image: this._originVideo})
-          },
-          width: 480,
-          height: 270
-        });
-        this._camera.start().catch(reason => {
-          logger.error(`start mediapipe camera error, eMsg: ${reason}`)
-          this._camera = undefined
-        })
-      }
-    } else {
-      // 执行替换颜色，不发原流给用户时才执行，
-      if (this._shouldSendOriginVideo === false && this._originVideo.srcObject) {
+    // 使用绿幕和不画背景都使用timer来执行
+    if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE || this._useGreenScreen === true) {
+      if (this._originVideo.srcObject) {
         this._handleVideoCanvasCtx.drawImage(this._originVideo, 0, 0, this._handleVideoCanvas.width, this._handleVideoCanvas.height);
         let frame = this._handleVideoCanvasCtx.getImageData(0, 0, this._handleVideoCanvas.width, this._handleVideoCanvas.height);
         let l = frame.data.length / 4;
@@ -364,6 +332,67 @@ export default class BeautifyVideoClient {
         this._showCanvasCtx.drawImage(this._handleVideoCanvas, 0, 0, this._showCanvas.width, this._showCanvas.height)
         // this._showCanvasCtx.putImageData(frame, 0, 0, 0, 0, this._showCanvas.width, this._showCanvas.height);
       }
+    } else {
+      if (!this._selfieSegmentation) {
+        try {
+          this._selfieSegmentation = new SelfieSegmentation({ locateFile: (file) => {
+              return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+            }
+          });
+          this._selfieSegmentation.setOptions({
+            modelSelection: 1,
+          });
+          this._selfieSegmentation.onResults((results) => {
+            if (this._showCanvasCtx) {
+              this._showCanvasCtx.save();
+              this._showCanvasCtx.clearRect(0, 0, this._showCanvas.width, this._showCanvas.height);
+              // 绘制背景
+              switch (this._replaceType) {
+                case REPLACE_BACKGROUND_TYPE_BLUR:
+                  this._showCanvasCtx.filter = `blur(${this._blurradius}px)`
+                  this._showCanvasCtx.drawImage(results.image, 0, 0, this._showCanvas.width, this._showCanvas.height)
+                  this._showCanvasCtx.filter = "none"
+                  break
+                case REPLACE_BACKGROUND_TYPE_IMAGE:
+                  this._showCanvasCtx.drawImage(this._bkImageEle, 0, 0, this._showCanvas.width, this._showCanvas.height)
+                  break
+                default:
+                  break
+              }
+              // 绘制模型
+              this._showCanvasCtx.globalCompositeOperation = 'destination-out';
+              this._showCanvasCtx.drawImage(results.segmentationMask, 0, 0, this._showCanvas.width, this._showCanvas.height);
+              // 绘制人
+              this._showCanvasCtx.globalCompositeOperation = 'destination-over';
+              this._showCanvasCtx.drawImage(results.image, 0, 0, this._showCanvas.width, this._showCanvas.height);
+              this._showCanvasCtx.restore();
+
+              // 请求下一帧动画
+              this._requestAnimation()
+            }
+          });
+        } catch (e) {
+          this._selfieSegmentation = undefined
+        }
+      }
+      if (this._isRequestAnimation === false) {
+        this._requestAnimation()
+      }
+    }
+  }
+
+  _requestAnimation() {
+    if (this._shouldRequestAnimation === true && this._selfieSegmentation) {
+      this._isRequestAnimation = true
+      requestAnimationFrame(() => {
+        if (this._shouldRequestAnimation === true) {
+          this._selfieSegmentation.send({image: this._originVideo})
+        } else {
+          this._isRequestAnimation = false
+        }
+      })
+    } else {
+      this._isRequestAnimation = false
     }
   }
 
@@ -440,6 +469,32 @@ export default class BeautifyVideoClient {
       h /= 6;
     }
     return {h, s, l}
+  }
+
+  _getStreamFrameRate(mediaStream, userDefault) {
+    if (mediaStream && mediaStream.getVideoTracks() && !mediaStream.getVideoTracks().length > 0)
+     return mediaStream.getVideoTracks()[0].getSettings().frameRate
+    if (userDefault && userDefault === true)
+      return DEFAULT_FRAME_RATE
+    return undefined
+  }
+
+  _getStreamDeviceId(mediaStream) {
+    if (mediaStream && mediaStream.getVideoTracks() && !mediaStream.getVideoTracks().length > 0)
+      return mediaStream.getVideoTracks()[0].getSettings().deviceId
+    return undefined
+  }
+
+  _getStreamWidth(mediaStream) {
+    if (mediaStream && mediaStream.getVideoTracks() && !mediaStream.getVideoTracks().length > 0)
+      return mediaStream.getVideoTracks()[0].getSettings().width
+    return undefined
+  }
+
+  _getStreamHeight(mediaStream) {
+    if (mediaStream && mediaStream.getVideoTracks() && !mediaStream.getVideoTracks().length > 0)
+      return mediaStream.getVideoTracks()[0].getSettings().height
+    return undefined
   }
 
 }
