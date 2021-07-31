@@ -1,6 +1,5 @@
 import {log} from "./utils/logger";
 import {SelfieSegmentation} from "@mediapipe/selfie_segmentation";
-import {Camera} from "@mediapipe/camera_utils";
 
 
 const logger = log('ql-sfu-client', 'BeautifyVideoClient');
@@ -41,8 +40,8 @@ export default class BeautifyVideoClient {
       // 如果现存的流与原始流deviceId不一样或者帧数不一样就就重新获取流
       let originDeviceId = this._getStreamDeviceId(mediaStream)
       let originFrameRate = this._getStreamFrameRate(mediaStream, false)
-      let curDeviceId = this._getStreamDeviceId(this._originMediaStream)
-      let curFrameRate = this._getStreamFrameRate(this._originMediaStream, false)
+      let curDeviceId = this._getStreamDeviceId(this._originVideo.srcObject)
+      let curFrameRate = this._getStreamFrameRate(this._originVideo.srcObject, false)
       if ((!curDeviceId || curDeviceId !== originDeviceId) || (!curFrameRate || curFrameRate !== originFrameRate)) {
         let constraints = {
           video : {
@@ -54,7 +53,13 @@ export default class BeautifyVideoClient {
           audio : false
         };
         navigator.mediaDevices.getUserMedia(constraints).then((mediaStream) => {
-          this._originVideo.srcObject = mediaStream
+          if (!this._originVideo.srcObject) {
+            this._originVideo.srcObject = mediaStream
+          } else {
+            this._originVideo.srcObject.addTrack(mediaStream.getVideoTracks()[0])
+            if (this._originVideo.srcObject.getVideoTracks().length > 1)
+              this._originVideo.srcObject.removeTrack(this._originVideo.srcObject.getVideoTracks()[0])
+          }
         });
       }
       this._originMediaStream = mediaStream
@@ -64,7 +69,8 @@ export default class BeautifyVideoClient {
       this._showCanvas = canvas
       this._showCanvasCtx = this._showCanvas.getContext('2d');
       this._shouldReCapture = true
-      this._reCaptureVideoStream()
+      if (this._originMediaStream)
+        this._reCaptureVideoStream()
     }
   }
 
@@ -108,6 +114,11 @@ export default class BeautifyVideoClient {
   useGreenScreen(use) {
     this._useGreenScreen = use
     this._startDrawBack()
+    setTimeout(() => {
+      if (this._availbleH[0] === -1) {
+        this._updateColor({offsetX: 30, offsetY: 30})
+      }
+    }, 500)
   }
 
   /**
@@ -139,11 +150,13 @@ export default class BeautifyVideoClient {
    * 关闭绘制页面，如果不替换背景，就把原来的流发回去
    */
   disappear() {
+    this._disappear = true
     if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE) {
       this._closeDrawColorTimer()
       this._shouldReCapture = true
+      this._reCaptureVideoStream()
+      this._closeVideoTracks()
     }
-    this._reCaptureVideoStream()
   }
 
   /**
@@ -151,12 +164,12 @@ export default class BeautifyVideoClient {
    */
   close() {
     this._closeDrawColorTimer()
+    this._shouldRequestAnimation = false
     this._selfieSegmentation.close();
     this._selfieSegmentation = undefined;
-    this._camera = undefined;
     this._showCanvasCtx = undefined;
     this._showCanvas = undefined;
-    this._originVideo.srcObject = undefined;
+    this._closeVideoTracks()
     this._originVideo = undefined;
     this._bkImageEle = undefined;
     this._handleVideoCanvasCtx = undefined;
@@ -189,13 +202,16 @@ export default class BeautifyVideoClient {
     // 是否应该重新捕捉视频
     this._shouldReCapture = false
 
+    // 是否关闭了canvas选择框
+    this._disappear = false
+
     // 初始化色相、饱和度、亮度
     this._hValue = 1.167;
     this._sValue = 0.1;
     this._lValue = 0.2;
-    this._availbleH = [0.4, 0.6];
-    this._availbleS = [0.4, 0.6];
-    this._availbleL = [0.4, 0.6];
+    this._availbleH = [-1, -1];
+    this._availbleS = [-1, -1];
+    this._availbleL = [-1, -1];
 
     // 初始化原始视频
     this._originVideo = document.createElement("VIDEO");
@@ -238,7 +254,7 @@ export default class BeautifyVideoClient {
     if (this._mediaStreamCallBack && this._shouldReCapture === true) {
       this._shouldReCapture = false
       try {
-        if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE) {
+        if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE && this._disappear === true) {
           this._mediaStreamCallBack(this._originMediaStream)
         } else {
           if (this._showCanvas)
@@ -255,6 +271,7 @@ export default class BeautifyVideoClient {
   }
 
   _startDrawBack() {
+    this._disappear = false
     switch (this._replaceType) {
       case REPLACE_BACKGROUND_TYPE_NONE:
         this._shouldRequestAnimation = false
@@ -305,8 +322,8 @@ export default class BeautifyVideoClient {
   }
 
   _handleVideo() {
-    // 使用绿幕和不画背景都使用timer来执行
-    if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE || this._useGreenScreen === true) {
+    // 使用绿幕和不画背景(非blue)都使用timer来执行
+    if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE || (this._useGreenScreen === true && this._replaceType !== REPLACE_BACKGROUND_TYPE_BLUR)) {
       if (this._originVideo.srcObject) {
         this._handleVideoCanvasCtx.drawImage(this._originVideo, 0, 0, this._handleVideoCanvas.width, this._handleVideoCanvas.height);
         let frame = this._handleVideoCanvasCtx.getImageData(0, 0, this._handleVideoCanvas.width, this._handleVideoCanvas.height);
@@ -350,29 +367,32 @@ export default class BeautifyVideoClient {
           });
           this._selfieSegmentation.onResults((results) => {
             if (this._showCanvasCtx) {
-              this._showCanvasCtx.save();
-              this._showCanvasCtx.clearRect(0, 0, this._showCanvas.width, this._showCanvas.height);
-              // 绘制背景
-              switch (this._replaceType) {
-                case REPLACE_BACKGROUND_TYPE_BLUR:
-                  this._showCanvasCtx.filter = `blur(${this._blurradius}px)`
-                  this._showCanvasCtx.drawImage(results.image, 0, 0, this._showCanvas.width, this._showCanvas.height)
-                  this._showCanvasCtx.filter = "none"
-                  break
-                case REPLACE_BACKGROUND_TYPE_IMAGE:
-                  this._showCanvasCtx.drawImage(this._bkImageEle, 0, 0, this._showCanvas.width, this._showCanvas.height)
-                  break
-                default:
-                  break
+              try {
+                this._showCanvasCtx.save();
+                this._showCanvasCtx.clearRect(0, 0, this._showCanvas.width, this._showCanvas.height);
+                // 绘制背景
+                switch (this._replaceType) {
+                  case REPLACE_BACKGROUND_TYPE_BLUR:
+                    this._showCanvasCtx.filter = `blur(${this._blurradius}px)`
+                    this._showCanvasCtx.drawImage(results.image, 0, 0, this._showCanvas.width, this._showCanvas.height)
+                    this._showCanvasCtx.filter = "none"
+                    break
+                  case REPLACE_BACKGROUND_TYPE_IMAGE:
+                    this._showCanvasCtx.drawImage(this._bkImageEle, 0, 0, this._showCanvas.width, this._showCanvas.height)
+                    break
+                  default:
+                    break
+                }
+                // 绘制模型
+                this._showCanvasCtx.globalCompositeOperation = 'destination-out';
+                this._showCanvasCtx.drawImage(results.segmentationMask, 0, 0, this._showCanvas.width, this._showCanvas.height);
+                // 绘制人
+                this._showCanvasCtx.globalCompositeOperation = 'destination-over';
+                this._showCanvasCtx.drawImage(results.image, 0, 0, this._showCanvas.width, this._showCanvas.height);
+                this._showCanvasCtx.restore();
+              } catch (e) {
+                logger.warn(`_selfieSegmentation draw error, eMsg: ${e}`)
               }
-              // 绘制模型
-              this._showCanvasCtx.globalCompositeOperation = 'destination-out';
-              this._showCanvasCtx.drawImage(results.segmentationMask, 0, 0, this._showCanvas.width, this._showCanvas.height);
-              // 绘制人
-              this._showCanvasCtx.globalCompositeOperation = 'destination-over';
-              this._showCanvasCtx.drawImage(results.image, 0, 0, this._showCanvas.width, this._showCanvas.height);
-              this._showCanvasCtx.restore();
-
               // 请求下一帧动画
               this._requestAnimation()
             }
@@ -392,7 +412,12 @@ export default class BeautifyVideoClient {
       this._isRequestAnimation = true
       requestAnimationFrame(() => {
         if (this._shouldRequestAnimation === true) {
-          this._selfieSegmentation.send({image: this._originVideo})
+          this._selfieSegmentation.send({image: this._originVideo}).catch((e) => {
+            logger.warn(`send originVideo to selfieSegmentation error, eMsg: ${e}`)
+            setTimeout(() => {
+              this._requestAnimation()
+            }, 100)
+          })
         } else {
           this._isRequestAnimation = false
         }
@@ -407,7 +432,7 @@ export default class BeautifyVideoClient {
     this._shouldDrawBack = true
   }
 
-  _updateColor(event) {
+  _updateColor({offsetX, offsetY}) {
 
     let rCount = 0
     let gCount = 0
@@ -418,10 +443,10 @@ export default class BeautifyVideoClient {
     let canvasSW = parseInt(this._showCanvas.style.width.replace("px", ""))
     let canvasSH = parseInt(this._showCanvas.style.height.replace("px", ""))
 
-    let round = 6
+    let round = 10
     let offset = round/2
-    let x = event.offsetX * (canvasW/canvasSW) - offset
-    let y = event.offsetY * (canvasH/canvasSH) - offset
+    let x = offsetX * (canvasW/canvasSW) - offset
+    let y = offsetY * (canvasH/canvasSH) - offset
     let frame = this._showCanvasCtx.getImageData(x < 0 ? 0 : x, y < 0 ? 0 : y, round, round)
     let l = frame.data.length / 4;
     for (let i = 0; i < l; i++) {
@@ -501,6 +526,17 @@ export default class BeautifyVideoClient {
     if (mediaStream && mediaStream.getVideoTracks() && mediaStream.getVideoTracks().length > 0)
       return mediaStream.getVideoTracks()[0].getSettings().height
     return undefined
+  }
+
+  _closeVideoTracks() {
+    try {
+      if (this._originVideo.srcObject) {
+        for (let videoTrack of this._originVideo.srcObject.getVideoTracks()) {
+          videoTrack.stop()
+        }
+      }
+    } catch (e) {}
+    this._originVideo.srcObject = undefined;
   }
 
 }

@@ -17,7 +17,6 @@
     "debug": "^4.1.1",
     "mediasoup-client": "^3.6.2",
     "ql-im-client": "git+https://github.com/dobybros/ql-im-client.git",
-    "@mediapipe/selfie_segmentation": "^0.1.1622680987",
-    "@mediapipe/camera_utils": "^0.3.1620247984"
+    "@mediapipe/selfie_segmentation": "^0.1.1622680987"
   }
 }
