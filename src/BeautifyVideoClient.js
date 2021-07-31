@@ -36,7 +36,7 @@ export default class BeautifyVideoClient {
    * @param canvas 更换展示结果的canvas
    */
   upsertParams({mediaStream, canvas}) {
-    logger.info(`reset params mediaStream ${mediaStream} canvas ${canvas} frameRate ${frameRate}`)
+    logger.info(`reset params mediaStream ${mediaStream} canvas ${canvas}`)
     if (mediaStream) {
       // 如果现存的流与原始流deviceId不一样或者帧数不一样就就重新获取流
       let originDeviceId = this._getStreamDeviceId(mediaStream)
