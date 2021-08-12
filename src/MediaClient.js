@@ -410,7 +410,7 @@ export default class MediaClient {
       if (peer) {
         let oldElement = peer[kind + "Element"];
         if (oldElement) {
-          if (oldElement === element)
+          if (oldElement === element && kind === "video")
             return
           oldElement.srcObject = null
         }
