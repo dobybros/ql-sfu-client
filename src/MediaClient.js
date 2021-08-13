@@ -410,7 +410,7 @@ export default class MediaClient {
       if (peer) {
         let oldElement = peer[kind + "Element"];
         if (oldElement) {
-          if (oldElement === element && kind === "video")
+          if (oldElement === element)
             return
           oldElement.srcObject = null
         }
@@ -1077,6 +1077,10 @@ export default class MediaClient {
             this._releasePeerCheckVideoSrcTimer(peerId);
           }
         }, 1000);
+      } else {
+        setTimeout(() => {
+          element.srcObject = element.srcObject;
+        }, 0);
       }
       /*let playPromise = element.play();
       if (playPromise) {
