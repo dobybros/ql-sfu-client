@@ -410,7 +410,7 @@ export default class MediaClient {
       if (peer) {
         let oldElement = peer[kind + "Element"];
         if (oldElement) {
-          if (oldElement === element)
+          if (oldElement === element && kind === "video")
             return
           oldElement.srcObject = null
         }
@@ -1078,9 +1078,12 @@ export default class MediaClient {
           }
         }, 1000);
       } else {
-        setTimeout(() => {
-          element.srcObject = element.srcObject;
-        }, 0);
+        this._releasePeerCheckAudioSrcTimer(peerId)
+        peer.checkAudioSrcTimeOut = setTimeout(() => {
+          let element = peer[kind + "Element"];
+          if (element != null)
+            element.srcObject = element.srcObject;
+        }, 100);
       }
       /*let playPromise = element.play();
       if (playPromise) {
@@ -1113,6 +1116,7 @@ export default class MediaClient {
       peer.status = PEER_STATUS_INIT;
       this._releaseReconnectInfo(peerId);
       this._releasePeerCheckVideoSrcTimer(peerId);
+      this._releasePeerCheckAudioSrcTimer(peerId)
       peer.device = null;
       if (peer.transport) {
         try {
@@ -1174,6 +1178,16 @@ export default class MediaClient {
     if (peer && peer.checkVideoSrcTimer) {
       clearTimeout(peer.checkVideoSrcTimer);
       peer.checkVideoSrcTimer = undefined;
+    }
+  }
+
+  _releasePeerCheckAudioSrcTimer(peerId) {
+    if (peerId) {
+      let peer = this._peerMap.get(peerId);
+      if (peer && peer.checkAudioSrcTimeOut) {
+        clearTimeout(peer.checkAudioSrcTimeOut);
+        peer.checkAudioSrcTimeOut = undefined;
+      }
     }
   }
 
