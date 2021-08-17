@@ -737,7 +737,11 @@ export default class MediaClient {
     if (peer && peer.status === PEER_STATUS_INIT) {
       peer.status = PEER_STATUS_CONNECTING;
       try {
+        // 兼容edge
+        let userAgent = this._resetUserAgent()
         peer.device = new mediasoupClient.Device();
+        // 将ua设为原值
+        this._recoverUserAgent(userAgent)
       } catch (e) {
         logger.error("peer" + peerId + " create device error, eMsg: " + e);
         return;
@@ -1716,6 +1720,44 @@ export default class MediaClient {
       }, resultCallback)
     } else {
       logger.warn(`imClient is null when send messageType: ${contentType} message: ${content}`)
+    }
+  }
+
+  // 兼容edge
+  _resetUserAgent() {
+    let userAgent = navigator.userAgent;
+    if (userAgent.includes("EdgA") /* android edge */ || userAgent.includes("EdgiOS") /* iOS edge */ ) {
+      let updateUA = userAgent;
+      updateUA = updateUA.replace("EdgA", "Edg");
+      updateUA = updateUA.replace("EdgiOS", "Edg");
+      let userAgentProperty = Object.getOwnPropertyDescriptor(navigator, "userAgent");
+      let config = false;
+      if (!userAgentProperty)
+        config = true;
+      Object.defineProperty(navigator, 'userAgent', {
+        value: updateUA,
+        writable: true,
+        configurable: config
+      });
+    } else {
+      userAgent = null;
+    }
+    return userAgent;
+  }
+
+  _recoverUserAgent(userAgent) {
+    if (userAgent) {
+      let userAgentProperty = Object.getOwnPropertyDescriptor(navigator, "userAgent");
+      if (userAgentProperty) {
+        if (userAgentProperty.configurable === true) {
+          delete navigator.userAgent;
+        } else {
+          Object.defineProperty(navigator, 'userAgent', {
+            value: userAgent,
+            writable: true
+          });
+        }
+      }
     }
   }
 
