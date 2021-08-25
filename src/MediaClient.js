@@ -384,10 +384,12 @@ export default class MediaClient {
       if (peer && peer.status === PEER_STATUS_INIT && !peer.audioElement && !peer.videoElement) {
         if (audioElement) {
           this._setElementParam(audioElement, "audio");
+          audioElement.srcObject = new MediaStream([]);
           peer.audioElement = audioElement;
         }
         if (videoElement) {
           this._setElementParam(videoElement, "video");
+          videoElement.srcObject = new MediaStream([]);
           peer.videoElement = videoElement;
         }
         this._getRouterRtpCapability(peerId);
@@ -410,7 +412,7 @@ export default class MediaClient {
       if (peer) {
         let oldElement = peer[kind + "Element"];
         if (oldElement) {
-          if (oldElement === element && kind === "video")
+          if (oldElement === element)
             return
           oldElement.srcObject = null
         }
@@ -1053,7 +1055,14 @@ export default class MediaClient {
     let element = peer[kind + "Element"];
     if (element) {
       logger.info("will set consumer track, peer " + peerId + ", kind " + kind);
-      element.srcObject = new MediaStream([consumer.track]);
+      if (element.srcObject) {
+        if (element.srcObject.getTracks().length === 0)
+        while (element.srcObject.getTracks().length > 0)
+          element.srcObject.removeTrack(element.srcObject.getTracks()[0])
+        element.srcObject.addTrack(consumer.track)
+      } else {
+        element.srcObject = new MediaStream([consumer.track]);
+      }
       if (kind === "video") {
         this._releasePeerCheckVideoSrcTimer(peerId);
         peer.checkVideoSrcTimer = setTimeout(() => {
