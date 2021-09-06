@@ -642,16 +642,21 @@ export default class MediaClient {
     }
   }
 
+  /**
+   * ios设备变化时需要重新给srcObject赋值
+   */
   deviceChanged() {
     this._getDeviceList().then((devices) => {
       if (devices) {
         let deviceUpdated = false;
         if (!this._devices) {
+          // first changed
           deviceUpdated = true
         } else {
           if (devices.length !== this._devices.length) {
             deviceUpdated = true;
           } else {
+            // sometimes remove airports, the length will not change, but the order will update.
             for (let i = 0; i < devices.length; i++) {
               let oldDevice = this._devices[i];
               let newDevice = devices[i];
