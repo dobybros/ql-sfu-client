@@ -1,5 +1,6 @@
 /**
  * 0 ~ 255
+ * note: the track must be clone if it is local track
  */
 
 export default class SoundMeter {
@@ -43,4 +44,5 @@ SoundMeter.prototype.stop = function() {
   } catch (e) {}
   this.analyser = undefined;
   this.callback = undefined;
+  this.context = undefined;
 };

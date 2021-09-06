@@ -642,6 +642,44 @@ export default class MediaClient {
     }
   }
 
+  deviceChanged() {
+    this._getDeviceList().then((devices) => {
+      if (devices) {
+        let deviceUpdated = false;
+        if (!this._devices) {
+          deviceUpdated = true
+        } else {
+          if (devices.length !== this._devices.length) {
+            deviceUpdated = true;
+          } else {
+            for (let i = 0; i < devices.length; i++) {
+              let oldDevice = this._devices[i];
+              let newDevice = devices[i];
+              if (oldDevice.deviceId !== newDevice.deviceId) {
+                deviceUpdated = true;
+                break;
+              }
+            }
+          }
+        }
+        if (deviceUpdated === true) {
+          logger.info(`devices updated, will reset consumers audio`)
+          this._devices = devices;
+          setTimeout(() => {
+            if (this._peerMap) {
+              for (let peer of this._peerMap.values()) {
+                if (peer.audioElement && peer.audioElement.srcObject) {
+                  logger.info(`will reset audio for peer ${peer.peerId}`)
+                  peer.audioElement.srcObject = peer.audioElement.srcObject;
+                }
+              }
+            }
+          }, 200);
+        }
+      }
+    });
+  }
+
   /* --------------------------- 面向过程发流（结束） -------------------------- */
 
   _close() {
@@ -685,6 +723,16 @@ export default class MediaClient {
     this._joind = false;
     this._connect = false;
     this._imConnected = false;
+  }
+
+  _getDeviceList() {
+    return new Promise((resolve, reject) => {
+      navigator.mediaDevices.enumerateDevices().then((devices) => {
+        resolve(devices)
+      }).catch(() => {
+        reject()
+      });
+    });
   }
 
   _createSendPeer(peerId, peerType, bandwidth, recvInfo) {
@@ -1056,7 +1104,6 @@ export default class MediaClient {
     if (element) {
       logger.info("will set consumer track, peer " + peerId + ", kind " + kind);
       if (element.srcObject) {
-        if (element.srcObject.getTracks().length === 0)
         while (element.srcObject.getTracks().length > 0)
           element.srcObject.removeTrack(element.srcObject.getTracks()[0])
         element.srcObject.addTrack(consumer.track)
