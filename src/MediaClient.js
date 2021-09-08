@@ -82,6 +82,7 @@ export default class MediaClient {
         this._needCloneSendTrack = false;
       else
         this._needCloneSendTrack = true;
+      this._addListenerToRefreshAudio();
       this._connectIM();
     } else {
       logger.info(`user init mediaClient error, param error.`);
@@ -642,34 +643,15 @@ export default class MediaClient {
     }
   }
 
-  /**
-   * ios设备变化时需要重新给srcObject赋值
-   */
-  deviceChanged() {
-    this._getDeviceList().then((devices) => {
-      if (devices) {
-        let deviceUpdated = false;
-        if (!this._devices) {
-          // first changed
-          deviceUpdated = true
-        } else {
-          if (devices.length !== this._devices.length) {
-            deviceUpdated = true;
-          } else {
-            // sometimes remove airports, the length will not change, but the order will update.
-            for (let i = 0; i < devices.length; i++) {
-              let oldDevice = this._devices[i];
-              let newDevice = devices[i];
-              if (oldDevice.deviceId !== newDevice.deviceId) {
-                deviceUpdated = true;
-                break;
-              }
-            }
-          }
-        }
-        if (deviceUpdated === true) {
+  /* --------------------------- 面向过程发流（结束） -------------------------- */
+
+  // 解决有时插入再拔掉耳机听不到声音的问题，更多见于iOS
+  _addListenerToRefreshAudio() {
+    if (this._audioContext) {
+      this._audioContext.onstatechange = () => {
+        logger.info(`audio context state changed to ${this._audioContext.state}`)
+        if (this._audioContext.state === "running" && (Date.now() - this._audioCtxUTime > 500)) {
           logger.info(`devices updated, will reset consumers audio`)
-          this._devices = devices;
           setTimeout(() => {
             if (this._peerMap) {
               for (let peer of this._peerMap.values()) {
@@ -680,12 +662,11 @@ export default class MediaClient {
               }
             }
           }, 200);
+          this._audioCtxUTime = Date.now();
         }
       }
-    });
+    }
   }
-
-  /* --------------------------- 面向过程发流（结束） -------------------------- */
 
   _close() {
     this._closeIM();
@@ -728,6 +709,8 @@ export default class MediaClient {
     this._joind = false;
     this._connect = false;
     this._imConnected = false;
+    // audio context state update time
+    this._audioCtxUTime = Date.now();
   }
 
   _getDeviceList() {
