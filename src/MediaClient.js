@@ -385,12 +385,14 @@ export default class MediaClient {
       if (peer && peer.status === PEER_STATUS_INIT && !peer.audioElement && !peer.videoElement) {
         if (audioElement) {
           this._setElementParam(audioElement, "audio");
-          audioElement.srcObject = new MediaStream([]);
+          if (!audioElement.srcObject)
+            audioElement.srcObject = new MediaStream([]);
           peer.audioElement = audioElement;
         }
         if (videoElement) {
           this._setElementParam(videoElement, "video");
-          videoElement.srcObject = new MediaStream([]);
+          if (!videoElement.srcObject)
+            videoElement.srcObject = new MediaStream([]);
           peer.videoElement = videoElement;
         }
         this._getRouterRtpCapability(peerId);
