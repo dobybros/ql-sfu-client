@@ -218,7 +218,7 @@ export default class MediaClient {
           }
           producer.replaceTrack({track : cloneTrack});
           if (newTrack.kind === "audio") {
-            this._upsertAudioMeter(peerId, newTrack.clone());
+            this._upsertAudioMeter(peerId, newTrack.clone(), true);
           }
         } else {
           await this._produceTrack(peerId, trackId);
@@ -1051,7 +1051,7 @@ export default class MediaClient {
                   producer.pause();
                 }
                 if (track.kind === "audio") {
-                  this._upsertAudioMeter(peerId, track.clone())
+                  this._upsertAudioMeter(peerId, track.clone(), true)
                 }
               } else {
                 try {
@@ -1145,7 +1145,7 @@ export default class MediaClient {
       }*/
     }
     if (kind === "audio") {
-      this._upsertAudioMeter(peerId, consumer.track);
+      this._upsertAudioMeter(peerId, consumer.track, false);
     }
   }
 
@@ -1332,7 +1332,7 @@ export default class MediaClient {
     }
   }
 
-  _upsertAudioMeter(peerId, audioTrack) {
+  _upsertAudioMeter(peerId, audioTrack, isCloned) {
     try {
       if (this._audioContext && this._audioMeterCallback && peerId && audioTrack) {
         let soundMeter = this._soundMeterMap.get(peerId);
@@ -1348,7 +1348,7 @@ export default class MediaClient {
             // logger.info(`audio meter update, ${n}`);
             this._audioMeterCallback(peerId, n);
           }
-        }, this._audioFrequancy ? this._audioFrequancy : 200);
+        }, this._audioFrequancy ? this._audioFrequancy : 200, isCloned);
         this._soundMeterMap.set(peerId, soundMeter);
       }
     } catch (e) {

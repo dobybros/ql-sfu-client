@@ -4,9 +4,12 @@
  */
 
 export default class SoundMeter {
-  constructor(context, stream, callback, frequency = 200) {
+  constructor(context, stream, callback, frequency = 200, isCloned = false) {
     this.context = context;
     this.callback = callback;
+    this.isCloned = isCloned;
+    if (isCloned === true)
+      this.stream = stream
     this.analyser = context.createAnalyser();
     this.analyser.fftSize = 32;
     this.mic = context.createMediaStreamSource(stream);
@@ -41,6 +44,14 @@ SoundMeter.prototype.stop = function() {
   this.mic = undefined;
   try {
     this.analyser.disconnect()
+  } catch (e) {}
+  try {
+    if (this.isCloned === true && this.stream)
+      while (this.stream.getTracks().length > 0) {
+        let track = this.stream.getTracks()[0]
+        this.stream.removeTrack(track)
+        track.stop()
+      }
   } catch (e) {}
   this.analyser = undefined;
   this.callback = undefined;
