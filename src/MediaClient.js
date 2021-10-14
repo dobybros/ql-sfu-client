@@ -380,7 +380,7 @@ export default class MediaClient {
    */
   receiveMedia(peerId, audioElement, videoElement) {
     logger.info("user will receive media : " + peerId);
-    if (peerId && (audioElement || videoElement)) {
+    if (peerId) {
       let peer = this._peerMap.get(peerId);
       if (peer && peer.status === PEER_STATUS_INIT && !peer.audioElement && !peer.videoElement) {
         if (audioElement) {
