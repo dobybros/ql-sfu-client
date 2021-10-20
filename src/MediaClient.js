@@ -1164,6 +1164,7 @@ export default class MediaClient {
         peer.trackMap.clear();
       }
       peer.status = PEER_STATUS_INIT;
+      peer.transportStatus = TRANSPORT_STATUS_INIT;
       this._releaseReconnectInfo(peerId);
       this._releasePeerCheckVideoSrcTimer(peerId);
       this._releasePeerCheckAudioSrcTimer(peerId)
@@ -1245,7 +1246,6 @@ export default class MediaClient {
     if (peerId) {
       let peer = this._peerMap.get(peerId);
       if (peer) {
-        peer.transportStatus = TRANSPORT_STATUS_INIT;
         peer.disconnecteTime = null;
         if (peer.reconnectTimer) {
           clearTimeout(peer.reconnectTimer);
