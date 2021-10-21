@@ -1007,6 +1007,9 @@ export default class MediaClient {
           }
           let options = {
             track : cloneTrack,
+            stopTracks : this._needCloneSendTrack,
+            disableTrackOnPause : false,
+            zeroRtpOnPause : true,
             appData : {
               peerId : peerId,
               trackId : cloneTrack.id,
@@ -1025,7 +1028,6 @@ export default class MediaClient {
               opusDtx    : 1
             }
           }
-          options["stopTracks"] = this._needCloneSendTrack
           peer[`using${track.kind}trackId`] = `${cloneTrack.id}&&${trackId}`;
           logger.info(`peer ${peerId} ${track.kind} set usingTrackId ${cloneTrack.id}&&${trackId}`);
           if (!peer[`connecting${track.kind}trackId`]) {
@@ -1128,14 +1130,14 @@ export default class MediaClient {
             this._releasePeerCheckVideoSrcTimer(peerId);
           }
         }, 1000);
-      } else {
+      }/* else {
         this._releasePeerCheckAudioSrcTimer(peerId)
         peer.checkAudioSrcTimeOut = setTimeout(() => {
           let element = peer[kind + "Element"];
           if (element != null)
             element.srcObject = element.srcObject;
         }, 100);
-      }
+      }*/
       /*let playPromise = element.play();
       if (playPromise) {
         playPromise.then(() => {
@@ -1168,7 +1170,7 @@ export default class MediaClient {
       peer.transportStatus = TRANSPORT_STATUS_INIT;
       this._releaseReconnectInfo(peerId);
       this._releasePeerCheckVideoSrcTimer(peerId);
-      this._releasePeerCheckAudioSrcTimer(peerId)
+      // this._releasePeerCheckAudioSrcTimer(peerId)
       peer.device = null;
       if (peer.transport) {
         try {
