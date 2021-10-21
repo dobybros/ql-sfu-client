@@ -1025,6 +1025,7 @@ export default class MediaClient {
               opusDtx    : 1
             }
           }
+          options["stopTracks"] = this._needCloneSendTrack
           peer[`using${track.kind}trackId`] = `${cloneTrack.id}&&${trackId}`;
           logger.info(`peer ${peerId} ${track.kind} set usingTrackId ${cloneTrack.id}&&${trackId}`);
           if (!peer[`connecting${track.kind}trackId`]) {
