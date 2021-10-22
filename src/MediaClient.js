@@ -216,7 +216,9 @@ export default class MediaClient {
           if (this._needCloneSendTrack === true) {
             cloneTrack = newTrack.clone();
           }
+          producer.pause();
           producer.replaceTrack({track : cloneTrack});
+          producer.resume();
           if (newTrack.kind === "audio") {
             this._upsertAudioMeter(peerId, newTrack.clone(), true);
           }
