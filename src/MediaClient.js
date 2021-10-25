@@ -216,9 +216,11 @@ export default class MediaClient {
           if (this._needCloneSendTrack === true) {
             cloneTrack = newTrack.clone();
           }
-          producer.pause();
+          if (!this.isPaused(peerId, newTrack.kind))
+            producer.pause();
           producer.replaceTrack({track : cloneTrack});
-          producer.resume();
+          if (!this.isPaused(peerId, newTrack.kind))
+            producer.resume();
           if (newTrack.kind === "audio") {
             this._upsertAudioMeter(peerId, newTrack.clone(), true);
           }
@@ -509,6 +511,31 @@ export default class MediaClient {
             for (let trackId of peer.trackMap.keys()) {
               let track = peer.trackMap.get(trackId);
               if (track.kind === kind) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+    return false
+  }
+
+  /**
+   * 判断track是否相同
+   * @param peerId
+   * @param mediaTrack
+   * @return {boolean}
+   */
+  isMediaTrackSame(peerId, mediaTrack) {
+    if (peerId && mediaTrack) {
+      let peer = this._peerMap.get(peerId);
+      if (peer) {
+        if (peer.isProducer === true) {
+          if (peer.trackMap.size > 0) {
+            for (let trackId of peer.trackMap.keys()) {
+              let track = peer.trackMap.get(trackId);
+              if (track.kind === mediaTrack.kind && track.id === mediaTrack.id) {
                 return true;
               }
             }
