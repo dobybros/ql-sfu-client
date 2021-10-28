@@ -465,6 +465,16 @@ export default class MediaClient {
   }
 
   /**
+   * 关闭audio meter
+   * replace track前，最好关闭一下audioMeter，如果不关会导致某些安卓设备获取不到新流
+   * @param peerId
+   */
+  closeAudioMeter(peerId) {
+    if (peerId)
+      this._closeAudioMeter(peerId)
+  }
+
+  /**
    * 判断media是否已建联
    * @param peerId
    * @return boolean
@@ -1367,14 +1377,8 @@ export default class MediaClient {
   _upsertAudioMeter(peerId, audioTrack, isCloned) {
     try {
       if (this._audioContext && this._audioMeterCallback && peerId && audioTrack) {
-        let soundMeter = this._soundMeterMap.get(peerId);
-        this._soundMeterMap.delete(peerId);
-        if (soundMeter) {
-          try {
-            soundMeter.stop();
-          } catch (e) {}
-        }
-        soundMeter = new SoundMeter(this._audioContext, new MediaStream([audioTrack]), (n) => {
+        this._closeAudioMeter(peerId)
+        let soundMeter = new SoundMeter(this._audioContext, new MediaStream([audioTrack]), (n) => {
           let peer = this._peerMap.get(peerId);
           if (peer && peer.audioPause === false) {
             // logger.info(`audio meter update, ${n}`);
