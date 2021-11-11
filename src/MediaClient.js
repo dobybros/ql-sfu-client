@@ -1135,6 +1135,7 @@ export default class MediaClient {
     let element = peer[kind + "Element"];
     if (element) {
       logger.info("will set consumer track, peer " + peerId + ", kind " + kind);
+
       if (element.srcObject) {
         while (element.srcObject.getTracks().length > 0)
           element.srcObject.removeTrack(element.srcObject.getTracks()[0])
@@ -1142,6 +1143,7 @@ export default class MediaClient {
       } else {
         element.srcObject = new MediaStream([consumer.track]);
       }
+
       if (kind === "video") {
         this._releasePeerCheckVideoSrcTimer(peerId);
         peer.checkVideoSrcTimer = setTimeout(() => {
@@ -1381,7 +1383,7 @@ export default class MediaClient {
         let soundMeter = new SoundMeter(this._audioContext, new MediaStream([audioTrack]), (n) => {
           let peer = this._peerMap.get(peerId);
           if (peer && peer.audioPause === false) {
-            // logger.info(`audio meter update, ${n}`);
+            // logger.info(`audio meter update, peer: ${peerId}, volume: ${n}`);
             this._audioMeterCallback(peerId, n);
           }
         }, this._audioFrequancy ? this._audioFrequancy : 200, isCloned);
@@ -1398,6 +1400,14 @@ export default class MediaClient {
       element.setAttribute("playsinline", '');
       if (kind === "video") {
         element.muted = true;
+      }
+      element.onpause = (event) => {
+        logger.info(`.............. ${kind} paused`)
+        element.play().then(result => {
+          element.srcObject = element.srcObject
+        }).catch(e => {
+          logger.error(`${kind} paused, play error, ${e}`)
+        })
       }
     }
   }
@@ -1461,6 +1471,7 @@ export default class MediaClient {
       case "disconnected":
         logger.info("im disconnected, will release peer");
         this._imConnected = false;
+        this._joind = false;
         this._handleIMDisconnected();
         break;
       case "kickout":
@@ -1492,7 +1503,7 @@ export default class MediaClient {
       case "canReceiveTran" : {
         const {peerIds, init} = content;
         if (init)
-          this._joind= true;
+          this._joind = true;
         if (this._joind === true) {
           peerIds.forEach((peerId) => {
             logger.info("can receive peerId : " + peerId);

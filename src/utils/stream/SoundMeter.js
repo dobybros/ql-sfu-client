@@ -18,9 +18,10 @@ export default class SoundMeter {
     this.dataArray = new Uint8Array(bufferLength);
 
     this.intervalId = window.setInterval(() => {
-      if (this.context.status === undefined || this.context.status === 'suspend') {
-        this.context.resume()
-      }
+      // 下面这个地方注释掉，是因为在iOS拔掉耳机时，出现了个非常奇怪的声音，有个叫hark的包实现里面也没有下面这个
+      // if (this.context.status === undefined || this.context.status === 'suspend') {
+      //   this.context.resume()
+      // }
       this.analyser.getByteFrequencyData(this.dataArray);
       // let strength = 0
       // this.dataArray.forEach(v => {
