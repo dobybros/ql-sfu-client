@@ -691,19 +691,34 @@ export default class MediaClient {
     if (this._audioContext) {
       this._audioContext.onstatechange = () => {
         logger.info(`audio context state changed to ${this._audioContext.state}`)
-        if (this._audioContext.state === "running" && (Date.now() - this._audioCtxUTime > 500)) {
-          logger.info(`devices updated, will reset consumers audio`)
-          setTimeout(() => {
-            if (this._peerMap) {
-              for (let peer of this._peerMap.values()) {
-                if (peer.audioElement && peer.audioElement.srcObject) {
-                  logger.info(`will reset audio for peer ${peer.peerId}`)
-                  peer.audioElement.srcObject = peer.audioElement.srcObject;
-                }
+        switch (this._audioContext.state) {
+          case "suspended":
+            setTimeout(() => {
+              try {
+                this._audioContext.resume();
+              } catch (e) {
+                logger.error(`resume audio context failed when suspended, ${e}`)
               }
+            }, 500)
+            break;
+          case "running":
+            if (Date.now() - this._audioCtxUTime > 500) {   // 有时iphone上会连续回调多次
+              logger.info(`devices updated, will reset consumers audio`)
+              setTimeout(() => {
+                if (this._peerMap) {
+                  for (let peer of this._peerMap.values()) {
+                    if (peer.audioElement && peer.audioElement.srcObject) {
+                      logger.info(`will reset audio for peer ${peer.peerId}`)
+                      peer.audioElement.srcObject = peer.audioElement.srcObject;
+                    }
+                  }
+                }
+              }, 200);
+              this._audioCtxUTime = Date.now();
             }
-          }, 200);
-          this._audioCtxUTime = Date.now();
+            break;
+          default:
+            break;
         }
       }
     }
