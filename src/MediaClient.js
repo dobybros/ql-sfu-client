@@ -29,6 +29,12 @@ const PEER_TYPE_HAS_STREAM = 1;
 const PEER_TYPE_HAS_NOT_STREAM = 2;   // 面向建联过程发流，例如对接app的screenshare功能
 const PEER_TYPE_RECEIVING = 3;
 
+// audio context state
+const AUDIO_CTX_STATE_SUSPENDED = "suspended";
+const AUDIO_CTX_STATE_RUNNING = "running";
+const AUDIO_CTX_STATE_INTERRUPTED = "interrupted";    // iphone打faceTime电话时会出现这个问题
+const AUDIO_CTX_STATE_CLOSED = "closed";
+
 // result error code
 const RESULT_ERROR_CODE_CANNOT_FIND_TRANSPORT = 2011;
 
@@ -693,13 +699,7 @@ export default class MediaClient {
         logger.info(`audio context state changed to ${this._audioContext.state}`)
         switch (this._audioContext.state) {
           case "suspended":
-            setTimeout(() => {
-              try {
-                this._audioContext.resume();
-              } catch (e) {
-                logger.error(`resume audio context failed when suspended, ${e}`)
-              }
-            }, 500)
+            this._startCheckAudioContextState()
             break;
           case "running":
             if (Date.now() - this._audioCtxUTime > 500) {   // 有时iphone上会连续回调多次
@@ -721,6 +721,33 @@ export default class MediaClient {
             break;
         }
       }
+    }
+  }
+
+  _startCheckAudioContextState() {
+    this._closeCheckAudioCtxTimer()
+    this._checkAudioCtxTimer = setInterval(() => {
+      switch (this._audioContext.state) {
+        case AUDIO_CTX_STATE_SUSPENDED:
+          try {
+            this._audioContext.resume();
+          } catch (e) {
+            logger.error(`resume audio context failed when suspended, ${e}`)
+          }
+          break;
+        case AUDIO_CTX_STATE_RUNNING:
+          this._closeCheckAudioCtxTimer();
+          break;
+        default:
+          break;
+      }
+    }, 1000)
+  }
+
+  _closeCheckAudioCtxTimer() {
+    if (this._checkAudioCtxTimer) {
+      clearInterval(this._checkAudioCtxTimer)
+      this._checkAudioCtxTimer = null
     }
   }
 
@@ -746,6 +773,7 @@ export default class MediaClient {
       this._soundMeterMap.clear();
     }
     this._clearPeerStatsLog();
+    this._closeCheckAudioCtxTimer()
   }
 
   _closeIM() {
