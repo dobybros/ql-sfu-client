@@ -698,10 +698,10 @@ export default class MediaClient {
       this._audioContext.onstatechange = () => {
         logger.info(`audio context state changed to ${this._audioContext.state}`)
         switch (this._audioContext.state) {
-          case "suspended":
+          case AUDIO_CTX_STATE_SUSPENDED:
             this._startCheckAudioContextState()
             break;
-          case "running":
+          case AUDIO_CTX_STATE_RUNNING:
             if (Date.now() - this._audioCtxUTime > 500) {   // 有时iphone上会连续回调多次
               logger.info(`devices updated, will reset consumers audio`)
               setTimeout(() => {
