@@ -14,9 +14,9 @@
   },
   "homepage": "https://github.com/dobybros/ql-sfu-client#readme",
   "dependencies": {
+    "@mediapipe/selfie_segmentation": "^0.1.1622680987",
     "debug": "^4.1.1",
     "mediasoup-client": "^3.6.2",
-    "ql-im-client": "git+https://github.com/dobybros/ql-im-client.git",
-    "@mediapipe/selfie_segmentation": "^0.1.1622680987"
+    "ql-im-client": "git+https://github.com/dobybros/ql-im-client.git"
   }
 }

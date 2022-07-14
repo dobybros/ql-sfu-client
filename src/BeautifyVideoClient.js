@@ -8,6 +8,7 @@ const logger = log('ql-sfu-client', 'BeautifyVideoClient');
 const REPLACE_BACKGROUND_TYPE_NONE = 0    // 不替换背景
 const REPLACE_BACKGROUND_TYPE_BLUR = 1    // 模糊
 const REPLACE_BACKGROUND_TYPE_IMAGE = 2   // 替换图
+const REPLACE_BACKGROUND_TYPE_VIDEO = 3   // 替换视频
 
 // 默认帧数
 const DEFAULT_FRAME_RATE = 30
@@ -20,8 +21,8 @@ export default class BeautifyVideoClient {
 
   /**
    * 构造方法
-   * @param mediaStreamCallBack 视频流变化时的回调
-   * @param colorUpdatedCallBack 颜色变化时的回调
+   * @param mediaStreamCallBack 视频流变化时的回调，回调一个视频流
+   * @param colorUpdatedCallBack 颜色变化时的回调，为我有绿幕做准备的，但是效果不好，所以不打算做这个
    */
   constructor({mediaStreamCallBack, colorUpdatedCallBack}) {
     this._mediaStreamCallBack = mediaStreamCallBack;
@@ -76,19 +77,35 @@ export default class BeautifyVideoClient {
 
   /**
    * 更换背景
-   * @param imgUrl 背景图片的url
+   * @param imgSrc 背景图片的src
    */
-  replaceBackImg(imgUrl) {
-    logger.info(`start replace background image with image ${imgUrl}`);
-    if (imgUrl) {
-      if (imgUrl !== this._bkImageEle.src) {
-        this._bkImageEle.src = imgUrl;
-        this._bkImageEle.onload = () => {
-          this._replaceType = REPLACE_BACKGROUND_TYPE_IMAGE;
-          this._startDrawBack();
-        };
+  replaceBackImg(imgSrc) {
+    logger.info(`start replace background image with image ${imgSrc}`);
+    if (imgSrc) {
+      if (imgSrc !== this._bkImageEle.src) {
+        this._bkImageEle.src = imgSrc;
+        this._replaceType = REPLACE_BACKGROUND_TYPE_IMAGE;
+        this._startDrawBack();
       } else {
         this._replaceType = REPLACE_BACKGROUND_TYPE_IMAGE;
+        this._startDrawBack();
+      }
+    }
+  }
+
+  /**
+   * 更换视频
+   * @param videoSrc 背景视频的src
+   */
+  replaceBackVideo(videoSrc) {
+    logger.info(`start replace background video with video ${videoSrc}`);
+    if (videoSrc) {
+      if (videoSrc !== this._bkVideoEle.src) {
+        this._bkVideoEle.src = videoSrc;
+        this._replaceType = REPLACE_BACKGROUND_TYPE_VIDEO;
+        this._startDrawBack();
+      } else {
+        this._replaceType = REPLACE_BACKGROUND_TYPE_VIDEO;
         this._startDrawBack();
       }
     }
@@ -135,7 +152,7 @@ export default class BeautifyVideoClient {
    * @param restoreVideo 是否要恢复视频原样
    */
   pickColor(restoreVideo = false) {
-    if (this._replaceType === REPLACE_BACKGROUND_TYPE_IMAGE && this._useGreenScreen === true) {
+    if ((this._replaceType === REPLACE_BACKGROUND_TYPE_IMAGE || this._replaceType === REPLACE_BACKGROUND_TYPE_VIDEO) && this._useGreenScreen === true) {
       if (restoreVideo === true) {
         this._shouldDrawBack = false;
         setTimeout(() => {
@@ -231,6 +248,18 @@ export default class BeautifyVideoClient {
     this._bkImageEle = document.createElement("img")
     this._bkImageEle.crossOrigin = "Anonymous";
 
+    // 初始化需要改变的视频
+    this._bkVideoEle = document.createElement("video")
+    this._bkVideoEle.setAttribute("autoplay", '');
+    this._bkVideoEle.setAttribute("playsinline", '');
+    this._bkVideoEle.setAttribute("loop", 'loop');
+    this._bkVideoEle.crossOrigin = "Anonymous";
+    this._bkVideoEle.addEventListener("canplay", (event) => {
+      // if (this._replaceType === REPLACE_BACKGROUND_TYPE_VIDEO)
+      // this._replaceType = REPLACE_BACKGROUND_TYPE_VIDEO
+      //   this._startDrawBack();
+    })
+
     // 初始化处理图片的canvas
     this._handleImageCanvas = document.createElement("CANVAS");
     this._handleImageCanvas.width = `${DEFAULT_WIDTH}`
@@ -279,11 +308,14 @@ export default class BeautifyVideoClient {
         this._openDrawColorTimer();
         break
       case REPLACE_BACKGROUND_TYPE_IMAGE:
+      case REPLACE_BACKGROUND_TYPE_VIDEO:
         if (this._useGreenScreen === true) {
           // 使用绿幕
-          this._handleImageCanvasCtx.clearRect(0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
-          this._handleImageCanvasCtx.drawImage(this._bkImageEle, 0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
-          this._imageFrame = this._handleImageCanvasCtx.getImageData(0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
+          if (this._replaceType === REPLACE_BACKGROUND_TYPE_IMAGE) {
+            this._handleImageCanvasCtx.clearRect(0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
+            this._handleImageCanvasCtx.drawImage(this._bkImageEle, 0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
+            this._imageFrame = this._handleImageCanvasCtx.getImageData(0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
+          }
           this._shouldRequestAnimation = false
           this._shouldDrawBack = true
           this._openDrawColorTimer();
@@ -309,6 +341,11 @@ export default class BeautifyVideoClient {
   _openDrawColorTimer() {
     if (!this._computeInterval) {
       this._computeInterval = setInterval(()=>{
+        if (this._replaceType === REPLACE_BACKGROUND_TYPE_VIDEO) {
+          this._handleImageCanvasCtx.clearRect(0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
+          this._handleImageCanvasCtx.drawImage(this._bkVideoEle, 0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
+          this._imageFrame = this._handleImageCanvasCtx.getImageData(0, 0, this._handleImageCanvas.width, this._handleImageCanvas.height);
+        }
         this._handleVideo()
       }, 33)
     }
@@ -379,6 +416,9 @@ export default class BeautifyVideoClient {
                     break
                   case REPLACE_BACKGROUND_TYPE_IMAGE:
                     this._showCanvasCtx.drawImage(this._bkImageEle, 0, 0, this._showCanvas.width, this._showCanvas.height)
+                    break
+                  case REPLACE_BACKGROUND_TYPE_VIDEO:
+                    this._showCanvasCtx.drawImage(this._bkVideoEle, 0, 0, this._showCanvas.width, this._showCanvas.height)
                     break
                   default:
                     break
@@ -457,6 +497,8 @@ export default class BeautifyVideoClient {
     let r = rCount/l
     let g = gCount/l
     let b = bCount/l
+
+
 
     // 获取用户点击的颜色的hsl
     let result = this._rgbToHsl(r, g, b)
