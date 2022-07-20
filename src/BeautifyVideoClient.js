@@ -43,7 +43,9 @@ export default class BeautifyVideoClient {
       let originFrameRate = this._getStreamFrameRate(mediaStream, false)
       let curDeviceId = this._getStreamDeviceId(this._originVideo.srcObject)
       let curFrameRate = this._getStreamFrameRate(this._originVideo.srcObject, false)
-      if ((!curDeviceId || curDeviceId !== originDeviceId) || (!curFrameRate || curFrameRate !== originFrameRate)) {
+      // 不需要返回原始流才创建新流
+      this._originMediaStream = mediaStream
+      if (!this._shouldReturnOriginStream() && ((!curDeviceId || curDeviceId !== originDeviceId) || (!curFrameRate || curFrameRate !== originFrameRate))) {
         let constraints = {
           video : {
             width : DEFAULT_WIDTH,
@@ -62,13 +64,14 @@ export default class BeautifyVideoClient {
               this._originVideo.srcObject.removeTrack(this._originVideo.srcObject.getVideoTracks()[0])
           }
         });
+        // 重新创建流，就开始画，并且回调新流
+        this._shouldReCapture = true
+        this._startDrawBack()
       }
-      let shouldCaptureVideoStream = false
-      if (!this._originMediaStream)
-        shouldCaptureVideoStream = true
-      this._originMediaStream = mediaStream
-      if (shouldCaptureVideoStream)
+      if (this._shouldReturnOriginStream()) {
+        this._shouldReCapture = true
         this._reCaptureVideoStream()
+      }
     }
     if (canvas && canvas !== this._showCanvas) {
       // 如果更换了canvas，就重新捕捉需要给上层的流
@@ -84,12 +87,12 @@ export default class BeautifyVideoClient {
    * 打开模糊背景设置页面时调用
    */
   show() {
-    if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE) {
-      if (!this._checkVideoStreamIsAvailable(this._originVideo.srcObject) && this._checkVideoStreamIsAvailable(this._originMediaStream)) {
+    this._disappear = false
+    if (!this._checkVideoStreamIsAvailable(this._originVideo.srcObject)) {
+      if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE && this._checkVideoStreamIsAvailable(this._originMediaStream)) {
+        // 空白的时候比较特殊，因为用户关闭设置框时，如果没有选择背景，就会把原流回调过去
         this.upsertParams({mediaStream: this._originMediaStream})
       }
-      this._shouldReCapture = true
-      this.blankBack()
     }
   }
 
@@ -311,20 +314,20 @@ export default class BeautifyVideoClient {
     if (this._mediaStreamCallBack && this._shouldReCapture === true) {
       this._shouldReCapture = false
       try {
-        if (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE && this._disappear === true) {
+        if (this._shouldReturnOriginStream()) {
           this._mediaStreamCallBack(this._originMediaStream)
         } else {
-          if (this._showCanvas) {
-            this._mediaStreamCallBack(this._showCanvas.captureStream(this._getStreamFrameRate(this._originMediaStream, true)))
-          } else {
-            logger.warn(`should callback canvas, but canvas is null`)
-            this._mediaStreamCallBack(this._originMediaStream)
-          }
+          // this._mediaStreamCallBack(this._showCanvas.captureStream(this._getStreamFrameRate(this._originMediaStream, true)))
+          this._mediaStreamCallBack(this._showCanvas.captureStream())
         }
       } catch (e) {
         logger.error(`call mediaStream error, eMsg: ${e}`)
       }
     }
+  }
+
+  _shouldReturnOriginStream() {
+    return (this._replaceType === REPLACE_BACKGROUND_TYPE_NONE && this._disappear === true) || !this._showCanvas
   }
 
   _startDrawBack() {
